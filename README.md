@@ -16,6 +16,12 @@
   <img src="https://img.shields.io/badge/License-MIT-00E5A0?style=for-the-badge" />
 </p>
 
+<p align="center">
+  <a href="https://github.com/3v3nera/KeepMe/releases/latest">
+    <img src="https://img.shields.io/badge/Download_APK-v1.0.2-00E5A0?style=for-the-badge&logo=android&logoColor=black" alt="Download APK" />
+  </a>
+</p>
+
 ---
 
 ## 🌟 Overview
