@@ -16,8 +16,10 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        maven("https://jitpack.io")
     }
 }
 
-rootProject.name = "EasyTDLib"
+rootProject.name = "KeepMe"
 include(":app")
+include(":prismal")

@@ -14,3 +14,35 @@
 .cxx
 local.properties
 .idea/
+
+# Gradle and Kotlin caches
+.gradle/
+build/
+app/build/
+prismal/build/
+
+# Local build logs and temporary diagnostics
+*.log
+build_error.log
+build_full.txt
+build_jdk17.txt
+build_output.txt
+debug_log.txt
+temp_td.db
+
+# JDK and external bundles
+jdk/
+jdk17/
+jdk17.zip
+jdk17_new.zip
+PrismalAGSL_repo/
+scratch/
+
+# Temporary test captures
+phone_screen.png
+compose_splash.png
+splash_screen.png
+screenshot.png
+screenshot_new.png
+mesh_readme.md
+mesh_readme_utf8.md
