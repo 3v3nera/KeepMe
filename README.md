@@ -27,9 +27,16 @@
 ## 📸 Screenshots
 
 <p align="center">
-  <img src="docs/screenshots/01_home_screen.png" width="320" alt="KeepMe Home Screen" />
-  &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="docs/screenshots/02_search_screen.png" width="320" alt="KeepMe Search & Filters" />
+  <img src="docs/screenshots/01_home_screen.png" width="230" alt="KeepMe Home Screen" />
+  &nbsp;
+  <img src="docs/screenshots/02_folders_screen.png" width="230" alt="My Drive Folders" />
+  &nbsp;
+  <img src="docs/screenshots/03_create_upload.png" width="230" alt="Create & Upload Modal" />
+</p>
+<p align="center">
+  <img src="docs/screenshots/04_search_screen.png" width="230" alt="Search Screen" />
+  &nbsp;
+  <img src="docs/screenshots/05_settings_screen.png" width="230" alt="Settings & Auto-Backup" />
 </p>
 
 ---
