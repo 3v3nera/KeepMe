@@ -10,7 +10,11 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/3v3nera/KeepMe/releases/latest"><img src="https://img.shields.io/github/v/release/3v3nera/KeepMe?style=for-the-badge&color=3EE0B0&label=Download%20APK&logo=android&logoColor=black" alt="Download the latest KeepMe APK" /></a>
+  <a href="https://github.com/3v3nera/KeepMe/releases/latest"><img src="https://img.shields.io/badge/%E2%AC%87%EF%B8%8F_DOWNLOAD_APK-Get_the_latest_version-3EE0B0?style=for-the-badge&labelColor=0B0C0F" alt="Download the latest KeepMe APK" height="52" /></a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/3v3nera/KeepMe/releases/latest"><img src="https://img.shields.io/github/v/release/3v3nera/KeepMe?style=for-the-badge&color=3EE0B0&label=Latest%20release&logo=android&logoColor=black" alt="Latest KeepMe release" /></a>
   <a href="https://github.com/3v3nera/KeepMe/stargazers"><img src="https://img.shields.io/github/stars/3v3nera/KeepMe?style=for-the-badge&color=3EE0B0" alt="GitHub stars" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/3v3nera/KeepMe?style=for-the-badge&color=3EE0B0" alt="MIT license" /></a>
   <img src="https://img.shields.io/badge/Android-7.1%2B-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Android 7.1 and up" />
@@ -80,7 +84,7 @@ If you have been looking for a **Telegram Drive for Android**, a **free Google P
 
 ## Install
 
-1. Download the latest APK from the **[Releases page](https://github.com/3v3nera/KeepMe/releases/latest)**.
+1. Tap **[⬇️ Download the latest APK](https://github.com/3v3nera/KeepMe/releases/latest)**, then under **Assets** pick the `.apk` file.
 2. Allow installs from your browser or file manager if Android asks, then open the APK.
 3. Open KeepMe and sign in with your phone number. Telegram sends you a login code (and asks for your 2FA password if you set one).
 4. Grant photo access if you want camera backup, and you are done.
