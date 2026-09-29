@@ -75,18 +75,20 @@ object NotificationHelper {
         context: Context,
         current: Int,
         total: Int,
-        fileName: String
+        fileName: String,
+        percent: Int? = null
     ): Notification {
         createNotificationChannels(context)
-        val percent = if (total > 0) ((current.toFloat() / total.toFloat()) * 100).toInt() else 0
-        val title = if (total > 0) "Backing up to KeepMe ($percent%)" else "KeepMe Backup"
+        val calculatedPercent = percent ?: if (total > 0) (((current.toFloat() - 1f).coerceAtLeast(0f) / total.toFloat()) * 100).toInt() else 0
+        val boundedPercent = calculatedPercent.coerceIn(0, 99)
+        val title = if (total > 0) "Backing up to KeepMe ($boundedPercent%)" else "KeepMe Backup"
         val content = if (total > 0) "Uploading $current of $total • $fileName" else "Syncing files..."
 
         return NotificationCompat.Builder(context, CHANNEL_PROGRESS_ID)
             .setSmallIcon(android.R.drawable.stat_sys_upload)
             .setContentTitle(title)
             .setContentText(content)
-            .setProgress(total, current, total == 0)
+            .setProgress(100, boundedPercent, total == 0)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)

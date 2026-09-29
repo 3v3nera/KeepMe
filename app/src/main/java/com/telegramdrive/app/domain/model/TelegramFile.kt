@@ -23,6 +23,7 @@ data class TelegramFile(
     val duration: Int?,        // For videos/audio (seconds)
     val isFavorite: Boolean,
     val isInTrash: Boolean,
+    val trashedAt: Long? = null,
     val dateTaken: Long? = null
 ) : Parcelable {
     val effectiveDate: Long
@@ -31,3 +32,8 @@ data class TelegramFile(
 
 @Parcelize
 enum class FileType : Parcelable { IMAGE, VIDEO, DOCUMENT, AUDIO, OTHER }
+
+/** Unique across chats (message ids alone repeat between folders). */
+val TelegramFile.selectionKey: Long
+    get() = (chatId * -7046029254386353131L) xor messageId
+

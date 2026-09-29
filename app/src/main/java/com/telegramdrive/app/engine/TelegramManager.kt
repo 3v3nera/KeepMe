@@ -61,8 +61,23 @@ class TelegramManager(
     val fileUpdates: SharedFlow<TdApi.File> = _fileUpdates.asSharedFlow()
 
     private val pendingMessageSends = ConcurrentHashMap<Long, CompletableDeferred<TdApi.Message>>()
+    private val recentlySucceededMessages = ConcurrentHashMap<Long, Pair<TdApi.Message, Long>>()
+    private val recentlyFailedMessages = ConcurrentHashMap<Long, Pair<Exception, Long>>()
 
     fun registerPendingMessage(tempMessageId: Long): CompletableDeferred<TdApi.Message> {
+        val succeeded = recentlySucceededMessages.remove(tempMessageId)
+        if (succeeded != null) {
+            val deferred = CompletableDeferred<TdApi.Message>()
+            deferred.complete(succeeded.first)
+            return deferred
+        }
+        val failed = recentlyFailedMessages.remove(tempMessageId)
+        if (failed != null) {
+            val deferred = CompletableDeferred<TdApi.Message>()
+            deferred.completeExceptionally(failed.first)
+            return deferred
+        }
+
         val deferred = CompletableDeferred<TdApi.Message>()
         pendingMessageSends[tempMessageId] = deferred
         return deferred
@@ -70,6 +85,8 @@ class TelegramManager(
 
     fun unregisterPendingMessage(tempMessageId: Long) {
         pendingMessageSends.remove(tempMessageId)
+        recentlySucceededMessages.remove(tempMessageId)
+        recentlyFailedMessages.remove(tempMessageId)
     }
 
     private val _currentUser = MutableStateFlow<TdApi.User?>(null)
@@ -122,14 +139,32 @@ class TelegramManager(
             TdApi.UpdateMessageSendSucceeded.CONSTRUCTOR -> {
                 val update = result as TdApi.UpdateMessageSendSucceeded
                 Log.d("TDLib", "Message upload succeeded: oldMessageId=${update.oldMessageId}, newId=${update.message.id}")
-                pendingMessageSends.remove(update.oldMessageId)?.complete(update.message)
+                val deferred = pendingMessageSends.remove(update.oldMessageId)
+                if (deferred != null) {
+                    deferred.complete(update.message)
+                } else {
+                    val now = System.currentTimeMillis()
+                    recentlySucceededMessages[update.oldMessageId] = Pair(update.message, now)
+                    if (recentlySucceededMessages.size > 30) {
+                        recentlySucceededMessages.entries.removeIf { now - it.value.second > 60_000L }
+                    }
+                }
             }
 
             TdApi.UpdateMessageSendFailed.CONSTRUCTOR -> {
                 val update = result as TdApi.UpdateMessageSendFailed
                 Log.e("TDLib", "Message upload failed: oldMessageId=${update.oldMessageId}, error=${update.error.code} - ${update.error.message}")
                 val exception = Exception(update.error.message ?: "Upload failed (${update.error.code})")
-                pendingMessageSends.remove(update.oldMessageId)?.completeExceptionally(exception)
+                val deferred = pendingMessageSends.remove(update.oldMessageId)
+                if (deferred != null) {
+                    deferred.completeExceptionally(exception)
+                } else {
+                    val now = System.currentTimeMillis()
+                    recentlyFailedMessages[update.oldMessageId] = Pair(exception, now)
+                    if (recentlyFailedMessages.size > 30) {
+                        recentlyFailedMessages.entries.removeIf { now - it.value.second > 60_000L }
+                    }
+                }
             }
             
             TdApi.Error.CONSTRUCTOR -> {

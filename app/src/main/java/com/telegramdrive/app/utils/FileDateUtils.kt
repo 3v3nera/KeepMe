@@ -169,11 +169,12 @@ object FileDateUtils {
         if (timestamp <= 0L) return "Recent"
         val cal = Calendar.getInstance().apply { timeInMillis = timestamp }
         val currentCal = Calendar.getInstance()
-        return if (cal.get(Calendar.YEAR) == currentCal.get(Calendar.YEAR)) {
+        val raw = if (cal.get(Calendar.YEAR) == currentCal.get(Calendar.YEAR)) {
             SimpleDateFormat("MMMM", Locale.getDefault()).format(Date(timestamp))
         } else {
             SimpleDateFormat("MMMM yyyy", Locale.getDefault()).format(Date(timestamp))
         }
+        return raw.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
     }
 
     /**

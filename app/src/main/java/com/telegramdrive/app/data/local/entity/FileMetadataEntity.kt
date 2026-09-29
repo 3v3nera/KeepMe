@@ -47,6 +47,7 @@ fun FileMetadataEntity.toTelegramFile(): TelegramFile {
         duration = duration,
         isFavorite = isFavorite,
         isInTrash = isInTrash,
+        trashedAt = trashedAt,
         dateTaken = dateTaken
     )
 }

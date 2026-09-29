@@ -156,17 +156,18 @@ class AppUpdateManager @Inject constructor(
 
                             if (isApk) {
                                 val captionText = content.caption?.text ?: ""
+                                val messageTime = msg.date.toLong() * 1000L
                                 val updateInfo = parseUpdateInfo(
                                     fileName = fileName,
                                     caption = captionText,
                                     fileId = doc.document.id,
                                     fileSize = if (doc.document.size > 0) doc.document.size else doc.document.expectedSize,
                                     messageId = msg.id,
-                                    date = msg.date.toLong() * 1000L
+                                    date = messageTime
                                 )
 
                                 if (updateInfo != null) {
-                                    val isNewer = isNewerVersion(updateInfo.versionCode, updateInfo.versionName)
+                                    val isNewer = isNewerVersion(updateInfo.versionCode, updateInfo.versionName, messageTime)
                                     val isDismissed = !force && updateInfo.versionCode <= settingsDataStore.getDismissedUpdateVersionCode()
 
                                     Log.d(TAG, "Found APK candidate: ${updateInfo.fileName} v${updateInfo.versionName} (b${updateInfo.versionCode}), isNewer=$isNewer, isDismissed=$isDismissed")
@@ -208,6 +209,7 @@ class AppUpdateManager @Inject constructor(
 
     /**
      * Extracts version details from the Telegram post's caption or filename.
+     * Flexibly handles KeepMe, TelegramDrive, or any APK uploaded to the update channel.
      */
     private fun parseUpdateInfo(
         fileName: String,
@@ -235,9 +237,9 @@ class AppUpdateManager @Inject constructor(
             parsedVersionName = nameMatcher.group(1) ?: ""
         }
 
-        // 3. Fallback extraction from filename: e.g. TelegramDrive-v1.0.2-b3-debug.apk
+        // 3. Fallback extraction from filename: e.g. KeepMe-v1.0.2-b3-debug.apk, TelegramDrive-v1.0.2-b3-debug.apk
         if (parsedVersionCode == 0) {
-            val fileCodePattern = Pattern.compile("(?i)(?:-b|build|code|v[0-9.]+-)(\\d+)")
+            val fileCodePattern = Pattern.compile("(?i)(?:-b|_b|build|code|v[0-9.]+-)(\\d+)")
             val fileCodeMatcher = fileCodePattern.matcher(fileName)
             if (fileCodeMatcher.find()) {
                 parsedVersionCode = fileCodeMatcher.group(1)?.toIntOrNull() ?: 0
@@ -252,7 +254,7 @@ class AppUpdateManager @Inject constructor(
             }
         }
 
-        // 4. If versionCode is still 0, auto-derive from versionName (e.g., 1.0.2 -> 10002)
+        // 4. If versionCode is still 0, auto-derive from versionName (e.g., 1.0.3 -> 10003)
         if (parsedVersionCode == 0 && parsedVersionName.isNotBlank()) {
             val parts = parsedVersionName.split('.', '-').mapNotNull { it.toIntOrNull() }
             if (parts.isNotEmpty()) {
@@ -271,11 +273,12 @@ class AppUpdateManager @Inject constructor(
             "New performance optimizations, bug fixes, and feature enhancements."
         }
 
+        // 6. Robust fallback for any APK uploaded to @siddTdrive without explicit version numbers
         if (parsedVersionCode == 0 && parsedVersionName.isBlank()) {
-            return null
-        }
-
-        if (parsedVersionName.isBlank()) {
+            val dateStr = java.text.SimpleDateFormat("dd MMM", java.util.Locale.US).format(java.util.Date(date))
+            parsedVersionName = "Latest ($dateStr)"
+            parsedVersionCode = (date / 10000L).toInt().coerceAtLeast(BuildConfig.VERSION_CODE + 1)
+        } else if (parsedVersionName.isBlank()) {
             parsedVersionName = "1.0.$parsedVersionCode"
         }
 
@@ -291,15 +294,29 @@ class AppUpdateManager @Inject constructor(
         )
     }
 
-    private fun isNewerVersion(remoteCode: Int, remoteName: String): Boolean {
+    private fun isNewerVersion(remoteCode: Int, remoteName: String, msgDate: Long): Boolean {
         if (remoteCode > BuildConfig.VERSION_CODE) {
             return true
         }
-        if (remoteCode > 0 && remoteCode <= BuildConfig.VERSION_CODE) {
-            return false
+        if (compareSemanticVersion(remoteName, BuildConfig.VERSION_NAME) > 0) {
+            return true
         }
-        // Fallback: compare semantic version names if remoteCode was not specified
-        return compareSemanticVersion(remoteName, BuildConfig.VERSION_NAME) > 0
+        // If versions are similar or unversioned, check if APK was published after app was built/installed
+        try {
+            val packageInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                context.packageManager.getPackageInfo(context.packageName, android.content.pm.PackageManager.PackageInfoFlags.of(0))
+            } else {
+                @Suppress("DEPRECATION")
+                context.packageManager.getPackageInfo(context.packageName, 0)
+            }
+            val appInstallTime = maxOf(packageInfo.lastUpdateTime, packageInfo.firstInstallTime)
+            if (msgDate > appInstallTime && remoteCode >= BuildConfig.VERSION_CODE) {
+                Log.d(TAG, "Remote APK date ($msgDate) is newer than app install time ($appInstallTime).")
+                return true
+            }
+        } catch (_: Exception) {}
+
+        return false
     }
 
     private fun compareSemanticVersion(v1: String, v2: String): Int {
@@ -314,6 +331,8 @@ class AppUpdateManager @Inject constructor(
         return 0
     }
 
+    private var wakeLock: android.os.PowerManager.WakeLock? = null
+
     /**
      * Initiates a live download of the update APK file via TDLib.
      */
@@ -321,11 +340,87 @@ class AppUpdateManager @Inject constructor(
         downloadJob?.cancel()
         _downloadState.value = UpdateDownloadState.Downloading(0L, info.fileSize, 0f)
 
+        // Acquire WakeLock so download doesn't suspend when screen sleeps
+        try {
+            val powerManager = context.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
+            wakeLock = powerManager?.newWakeLock(
+                android.os.PowerManager.PARTIAL_WAKE_LOCK,
+                "KeepMe:AppUpdateDownloadWakeLock"
+            )?.apply {
+                setReferenceCounted(false)
+                acquire(30 * 60 * 1000L) // 30 min max safety timeout
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to acquire update WakeLock: ${e.message}")
+        }
+
         downloadJob = scope.launch {
+            val updatesDir = File(context.cacheDir, "updates").apply { mkdirs() }
+            val cleanVersion = info.versionName.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+            val destApk = File(updatesDir, "KeepMe-v${cleanVersion}.apk")
+
             try {
-                // Request download with priority 32 (highest)
+                // 1. Check if complete APK is already cached locally
+                if (destApk.exists() && destApk.length() > 0 && (info.fileSize <= 0 || destApk.length() >= info.fileSize - 1024)) {
+                    Log.d(TAG, "Cached update APK already exists: ${destApk.absolutePath}")
+                    _downloadState.value = UpdateDownloadState.ReadyToInstall(destApk, info)
+                    installApk(context, destApk)
+                    return@launch
+                }
+
+                // 2. Check TDLib's current file state directly
+                try {
+                    val initialFile = telegramManager.sendSuspend(TdApi.GetFile(info.fileId)) as? TdApi.File
+                    if (initialFile != null) {
+                        if (initialFile.local.isDownloadingCompleted && initialFile.local.path.isNotBlank()) {
+                            val source = File(initialFile.local.path)
+                            if (source.exists()) {
+                                source.copyTo(destApk, overwrite = true)
+                                _downloadState.value = UpdateDownloadState.ReadyToInstall(destApk, info)
+                                installApk(context, destApk)
+                                return@launch
+                            }
+                        } else if (initialFile.local.downloadedSize > 0) {
+                            val total = if (initialFile.expectedSize > 0) initialFile.expectedSize else info.fileSize
+                            val progress = if (total > 0) (initialFile.local.downloadedSize.toFloat() / total.toFloat()).coerceIn(0f, 1f) else 0f
+                            _downloadState.value = UpdateDownloadState.Downloading(initialFile.local.downloadedSize, total, progress)
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "GetFile pre-check notice: ${e.message}")
+                }
+
+                // 3. Request download with priority 32 (highest)
                 telegramManager.downloadFileHighPriority(info.fileId)
 
+                // 4. Polling fallback job (queries GetFile every 1000ms in case SharedFlow events drop)
+                val pollingJob = launch {
+                    while (true) {
+                        kotlinx.coroutines.delay(1000L)
+                        try {
+                            val currentFile = telegramManager.sendSuspend(TdApi.GetFile(info.fileId)) as? TdApi.File
+                            if (currentFile != null) {
+                                val downloaded = currentFile.local.downloadedSize
+                                val total = if (currentFile.expectedSize > 0) currentFile.expectedSize else info.fileSize
+                                val progress = if (total > 0) (downloaded.toFloat() / total.toFloat()).coerceIn(0f, 1f) else 0f
+                                _downloadState.value = UpdateDownloadState.Downloading(downloaded, total, progress)
+
+                                if (currentFile.local.isDownloadingCompleted && currentFile.local.path.isNotBlank()) {
+                                    val source = File(currentFile.local.path)
+                                    if (source.exists()) {
+                                        source.copyTo(destApk, overwrite = true)
+                                        _downloadState.value = UpdateDownloadState.ReadyToInstall(destApk, info)
+                                        installApk(context, destApk)
+                                        downloadJob?.cancel()
+                                        break
+                                    }
+                                }
+                            }
+                        } catch (_: Exception) {}
+                    }
+                }
+
+                // 5. SharedFlow event listener
                 telegramManager.fileUpdates.collect { file ->
                     if (file.id == info.fileId) {
                         val downloaded = file.local.downloadedSize
@@ -337,10 +432,8 @@ class AppUpdateManager @Inject constructor(
                         if (file.local.isDownloadingCompleted && file.local.path.isNotBlank()) {
                             val source = File(file.local.path)
                             if (source.exists()) {
-                                val updatesDir = File(context.cacheDir, "updates").apply { mkdirs() }
-                                val destApk = File(updatesDir, "TelegramDrive-v${info.versionName}.apk")
+                                pollingJob.cancel()
                                 source.copyTo(destApk, overwrite = true)
-
                                 _downloadState.value = UpdateDownloadState.ReadyToInstall(destApk, info)
                                 installApk(context, destApk)
                                 this@launch.cancel()
@@ -351,6 +444,10 @@ class AppUpdateManager @Inject constructor(
             } catch (e: Exception) {
                 Log.e(TAG, "Failed downloading update: ${e.message}", e)
                 _downloadState.value = UpdateDownloadState.Error("Download failed: ${e.localizedMessage}")
+            } finally {
+                try {
+                    wakeLock?.release()
+                } catch (_: Exception) {}
             }
         }
     }
@@ -361,6 +458,10 @@ class AppUpdateManager @Inject constructor(
     fun cancelDownload(fileId: Int) {
         downloadJob?.cancel()
         downloadJob = null
+        try {
+            wakeLock?.release()
+        } catch (_: Exception) {}
+        _downloadState.value = UpdateDownloadState.Idle
         scope.launch {
             try {
                 telegramManager.sendSuspend(TdApi.CancelDownloadFile(fileId, false))
@@ -368,7 +469,6 @@ class AppUpdateManager @Inject constructor(
                 Log.w(TAG, "Cancel download: ${e.message}")
             }
         }
-        _downloadState.value = UpdateDownloadState.Idle
     }
 
     fun dismissUpdate(versionCode: Int) {

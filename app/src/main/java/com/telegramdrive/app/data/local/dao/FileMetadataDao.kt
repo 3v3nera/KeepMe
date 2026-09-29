@@ -20,7 +20,7 @@ interface FileMetadataDao {
     @Query("SELECT * FROM files WHERE isInTrash = 1")
     fun getTrashFiles(): Flow<List<FileMetadataEntity>>
 
-    @Query("SELECT * FROM files WHERE fileName LIKE '%' || :query || '%' AND isInTrash = 0")
+    @Query("SELECT * FROM files WHERE fileName LIKE '%' || :query || '%' ESCAPE '\\' AND isInTrash = 0")
     fun searchFiles(query: String): Flow<List<FileMetadataEntity>>
 
     @Query("SELECT fileType, SUM(fileSize) as totalSize, COUNT(*) as fileCount FROM files WHERE isInTrash = 0 GROUP BY fileType")
@@ -56,6 +56,9 @@ interface FileMetadataDao {
 
     @Query("DELETE FROM files WHERE chatId = :chatId AND messageId = :messageId")
     suspend fun deleteFilePermanently(chatId: Long, messageId: Long)
+
+    @Query("DELETE FROM files WHERE chatId = :chatId AND messageId IN (:messageIds)")
+    suspend fun deleteFilesByMessageIds(chatId: Long, messageIds: List<Long>)
 
     @Query("DELETE FROM files WHERE chatId = :chatId")
     suspend fun deleteFilesInChat(chatId: Long)

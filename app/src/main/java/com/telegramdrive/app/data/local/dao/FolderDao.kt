@@ -28,4 +28,10 @@ interface FolderDao {
 
     @Delete
     suspend fun deleteFolder(folder: FolderEntity)
+
+    @Query("SELECT chatId FROM folders WHERE isSavedMessages = 0")
+    suspend fun getCustomFolderIds(): List<Long>
+
+    @Query("DELETE FROM folders WHERE chatId = :chatId")
+    suspend fun deleteFolderById(chatId: Long)
 }

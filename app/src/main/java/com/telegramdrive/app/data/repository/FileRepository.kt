@@ -25,6 +25,7 @@ import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withContext
 import com.telegramdrive.app.data.local.dao.FolderDao
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.sync.withLock
 
 @Singleton
 class FileRepository @Inject constructor(
@@ -56,11 +57,16 @@ class FileRepository @Inject constructor(
         }
     }
 
-    suspend fun syncAllFolders() = withContext(Dispatchers.IO) {
+    // One in-flight sync per chat, and a short cool-down so opening a folder (or several view
+    // models starting at once) does not fire duplicate full-history crawls.
+    private val syncLocks = java.util.concurrent.ConcurrentHashMap<Long, kotlinx.coroutines.sync.Mutex>()
+    private val lastSyncAt = java.util.concurrent.ConcurrentHashMap<Long, Long>()
+
+    suspend fun syncAllFolders(force: Boolean = false) = withContext(Dispatchers.IO) {
         try {
             val folders = folderDao.getAllFolders().firstOrNull() ?: emptyList()
             folders.map { folder ->
-                async { syncFolder(folder.chatId) }
+                async { syncFolder(folder.chatId, force) }
             }.awaitAll()
         } catch (e: Exception) {
             e.printStackTrace()
@@ -83,7 +89,11 @@ class FileRepository @Inject constructor(
     
     fun getTrashFiles(): Flow<List<FileMetadataEntity>> = fileMetadataDao.getTrashFiles()
     
-    fun searchFiles(query: String): Flow<List<FileMetadataEntity>> = fileMetadataDao.searchFiles(query)
+    fun searchFiles(query: String): Flow<List<FileMetadataEntity>> {
+        // Escape LIKE wildcards so searching for "50%" or "a_b" matches literally
+        val escaped = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        return fileMetadataDao.searchFiles(escaped)
+    }
     
     fun getStorageStats(): Flow<List<com.telegramdrive.app.domain.model.StorageStat>> = fileMetadataDao.getStorageStats()
 
@@ -105,7 +115,18 @@ class FileRepository @Inject constructor(
         fileMetadataDao.purgeOldTrash(cutoff)
     }
 
-    suspend fun syncFolder(chatId: Long) = withContext(Dispatchers.IO) {
+    suspend fun syncFolder(chatId: Long, force: Boolean = false) = withContext(Dispatchers.IO) {
+        val lock = syncLocks.getOrPut(chatId) { kotlinx.coroutines.sync.Mutex() }
+        if (!force && System.currentTimeMillis() - (lastSyncAt[chatId] ?: 0L) < SYNC_COOLDOWN_MS) return@withContext
+        lock.withLock {
+            // Someone else may have just finished while we waited for the lock
+            if (System.currentTimeMillis() - (lastSyncAt[chatId] ?: 0L) < 2_000L) return@withLock
+            doSyncFolder(chatId)
+        }
+    }
+
+    private suspend fun doSyncFolder(chatId: Long) {
+        var crawlComplete = true
         try {
             try {
                 telegramManager.sendSuspend(TdApi.GetChat(chatId))
@@ -142,6 +163,7 @@ class FileRepository @Inject constructor(
                         telegramManager.sendSuspend(request) as TdApi.FoundChatMessages
                     } catch (e: Exception) {
                         e.printStackTrace()
+                        crawlComplete = false
                         break
                     }
 
@@ -174,10 +196,25 @@ class FileRepository @Inject constructor(
                         }
                     }
                 fileMetadataDao.upsertFiles(mergedEntities)
+
+                // Drop rows for messages that no longer exist on Telegram (deleted elsewhere).
+                // Only after a fully successful crawl, so a network hiccup never wipes local data.
+                if (crawlComplete) {
+                    val liveIds = mergedEntities.map { it.messageId }.toHashSet()
+                    val staleIds = existingFiles.keys.filter { it !in liveIds }
+                    staleIds.chunked(500).forEach { chunk ->
+                        fileMetadataDao.deleteFilesByMessageIds(chatId, chunk)
+                    }
+                }
             }
+            if (crawlComplete) lastSyncAt[chatId] = System.currentTimeMillis()
         } catch (e: Exception) {
             e.printStackTrace()
         }
+    }
+
+    private companion object {
+        const val SYNC_COOLDOWN_MS = 30_000L
     }
 
     suspend fun uploadFileAndWait(
@@ -348,11 +385,14 @@ class FileRepository @Inject constructor(
 
     suspend fun emptyTrash() {
         val trashed = fileMetadataDao.getTrashFiles().firstOrNull() ?: emptyList()
-        trashed.forEach { file ->
-            try {
-                telegramManager.sendSuspend(TdApi.DeleteMessages(file.chatId, longArrayOf(file.messageId), true))
-            } catch (e: Exception) {
-                e.printStackTrace()
+        // Batch deletions per chat (TDLib accepts up to 100 ids per call) instead of one call per file
+        trashed.groupBy { it.chatId }.forEach { (chatId, files) ->
+            files.map { it.messageId }.chunked(100).forEach { ids ->
+                try {
+                    telegramManager.sendSuspend(TdApi.DeleteMessages(chatId, ids.toLongArray(), true))
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
             }
         }
         fileMetadataDao.emptyTrash()

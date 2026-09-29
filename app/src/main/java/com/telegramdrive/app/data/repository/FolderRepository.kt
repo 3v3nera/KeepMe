@@ -53,6 +53,7 @@ class FolderRepository @Inject constructor(
 
             // Get Channels
             val chatsList = fileManager.getChannels(100)
+            val keptChatIds = mutableSetOf<Long>()
             
             for (chatId in chatsList.chatIds) {
                 try {
@@ -61,6 +62,7 @@ class FolderRepository @Inject constructor(
                     if (chat.type is org.drinkless.tdlib.TdApi.ChatTypeSupergroup) {
                         val supergroupType = chat.type as org.drinkless.tdlib.TdApi.ChatTypeSupergroup
                         if (supergroupType.isChannel && (chat.title.contains("[TG]") || chat.title.contains("[TD]"))) {
+                            keptChatIds.add(chat.id)
                             val existingFolder = folderDao.getFolderById(chat.id)
                             val folderEmoji = existingFolder?.emoji ?: FolderEmojiUtils.getDeterministicEmoji(chat.id)
                             folderDao.upsertFolder(
@@ -77,6 +79,18 @@ class FolderRepository @Inject constructor(
                     }
                 } catch (e: Exception) {
                     // Ignore individual chat sync errors
+                    keptChatIds.add(chatId)
+                }
+            }
+
+            // Folders deleted or left elsewhere (e.g. in Telegram itself) must disappear here too.
+            // Only prune when the channel list was not truncated by the fetch limit.
+            if (chatsList.chatIds.size < 100) {
+                for (localId in folderDao.getCustomFolderIds()) {
+                    if (localId !in keptChatIds) {
+                        folderDao.deleteFolderById(localId)
+                        fileMetadataDao.deleteFilesInChat(localId)
+                    }
                 }
             }
         } catch (e: Exception) {

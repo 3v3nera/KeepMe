@@ -137,7 +137,9 @@ class CameraBackupWorker @AssistedInject constructor(
                 fun isCameraMedia(bucketName: String?, relativePath: String?, dataPath: String?): Boolean {
                     val bucket = bucketName?.lowercase()?.trim() ?: ""
                     val rel = relativePath?.lowercase()?.trim() ?: ""
-                    val data = dataPath?.lowercase()?.trim() ?: ""
+                    // Only the directory part: a photo merely *named* "..._download" or "..._pin"
+                    // must not be dropped from the backup
+                    val data = dataPath?.lowercase()?.trim()?.substringBeforeLast('/', "") ?: ""
 
                     // Strictly exclude non-camera directories/apps
                     if (bucket.contains("screenshot") || rel.contains("screenshot") || data.contains("screenshot")) return false
@@ -148,7 +150,7 @@ class CameraBackupWorker @AssistedInject constructor(
                     if (bucket.contains("facebook") || rel.contains("facebook") || data.contains("facebook")) return false
                     if (bucket.contains("snapchat") || rel.contains("snapchat") || data.contains("snapchat")) return false
                     if (bucket.contains("twitter") || rel.contains("twitter") || data.contains("twitter") || bucket == "x") return false
-                    if (bucket.contains("pin") || rel.contains("pin") || data.contains("pin")) return false
+                    if (bucket.contains("pinterest") || rel.contains("pinterest") || data.contains("pinterest")) return false
 
                     // Explicit camera matches
                     if (bucket == "camera" || bucket == "100andro" || bucket == "100media") return true
@@ -182,7 +184,7 @@ class CameraBackupWorker @AssistedInject constructor(
                         MediaStore.MediaColumns.DATA
                     )
                 }
-                val imageSelection = "${MediaStore.Images.Media.DATE_ADDED} > ?"
+                val imageSelection = "${MediaStore.Images.Media.DATE_ADDED} > ? AND ${MediaStore.MediaColumns.SIZE} > 0"
                 val imageSelectionArgs = arrayOf((effectiveTimestamp / 1000).toString())
 
                 context.contentResolver.query(
@@ -250,7 +252,7 @@ class CameraBackupWorker @AssistedInject constructor(
                         MediaStore.MediaColumns.DATA
                     )
                 }
-                val videoSelection = "${MediaStore.Video.Media.DATE_ADDED} > ?"
+                val videoSelection = "${MediaStore.Video.Media.DATE_ADDED} > ? AND ${MediaStore.MediaColumns.SIZE} > 0"
                 val videoSelectionArgs = arrayOf((effectiveTimestamp / 1000).toString())
 
                 context.contentResolver.query(
@@ -370,8 +372,9 @@ class CameraBackupWorker @AssistedInject constructor(
             // Progressively upload camera items
             for (item in mediaItems) {
                 currentUploaded++
+                val initialFilePercent = (((currentUploaded - 1).toDouble() / totalFiles.toDouble()) * 100).toInt().coerceIn(0, 99)
                 val notif = com.telegramdrive.app.utils.NotificationHelper.buildProgressNotification(
-                    context, currentUploaded, totalFiles, item.name
+                    context, currentUploaded, totalFiles, item.name, initialFilePercent
                 )
                 try {
                     androidx.core.app.NotificationManagerCompat.from(context).notify(com.telegramdrive.app.utils.NotificationHelper.PROGRESS_NOTIFICATION_ID, notif)
@@ -386,9 +389,12 @@ class CameraBackupWorker @AssistedInject constructor(
                     val now = System.currentTimeMillis()
                     if (now - lastNotifTime >= 500L) {
                         lastNotifTime = now
-                        val pctStr = if (total > 0L) " (${((uploaded.toDouble() / total.toDouble()) * 100).toInt()}%)" else ""
+                        val completedCount = currentUploaded - 1
+                        val fileFraction = if (total > 0L) (uploaded.toDouble() / total.toDouble()).coerceIn(0.0, 1.0) else 0.0
+                        val overallPercent = (((completedCount + fileFraction) / totalFiles.toDouble()) * 100).toInt().coerceIn(0, 99)
+                        val pctStr = if (total > 0L) " (${(fileFraction * 100).toInt()}%)" else ""
                         val progressNotif = com.telegramdrive.app.utils.NotificationHelper.buildProgressNotification(
-                            context, currentUploaded, totalFiles, "${item.name}$pctStr"
+                            context, currentUploaded, totalFiles, "${item.name}$pctStr", overallPercent
                         )
                         try {
                             androidx.core.app.NotificationManagerCompat.from(context).notify(com.telegramdrive.app.utils.NotificationHelper.PROGRESS_NOTIFICATION_ID, progressNotif)
@@ -406,8 +412,9 @@ class CameraBackupWorker @AssistedInject constructor(
                 currentUploaded++
                 val mime = docFile.type ?: "*/*"
                 val name = docFile.name ?: "doc_${System.currentTimeMillis()}"
+                val initialFilePercent = (((currentUploaded - 1).toDouble() / totalFiles.toDouble()) * 100).toInt().coerceIn(0, 99)
                 val notif = com.telegramdrive.app.utils.NotificationHelper.buildProgressNotification(
-                    context, currentUploaded, totalFiles, name
+                    context, currentUploaded, totalFiles, name, initialFilePercent
                 )
                 try {
                     androidx.core.app.NotificationManagerCompat.from(context).notify(com.telegramdrive.app.utils.NotificationHelper.PROGRESS_NOTIFICATION_ID, notif)
@@ -422,9 +429,12 @@ class CameraBackupWorker @AssistedInject constructor(
                     val now = System.currentTimeMillis()
                     if (now - lastNotifTime >= 500L) {
                         lastNotifTime = now
-                        val pctStr = if (total > 0L) " (${((uploaded.toDouble() / total.toDouble()) * 100).toInt()}%)" else ""
+                        val completedCount = currentUploaded - 1
+                        val fileFraction = if (total > 0L) (uploaded.toDouble() / total.toDouble()).coerceIn(0.0, 1.0) else 0.0
+                        val overallPercent = (((completedCount + fileFraction) / totalFiles.toDouble()) * 100).toInt().coerceIn(0, 99)
+                        val pctStr = if (total > 0L) " (${(fileFraction * 100).toInt()}%)" else ""
                         val progressNotif = com.telegramdrive.app.utils.NotificationHelper.buildProgressNotification(
-                            context, currentUploaded, totalFiles, "$name$pctStr"
+                            context, currentUploaded, totalFiles, "$name$pctStr", overallPercent
                         )
                         try {
                             androidx.core.app.NotificationManagerCompat.from(context).notify(com.telegramdrive.app.utils.NotificationHelper.PROGRESS_NOTIFICATION_ID, progressNotif)
@@ -437,6 +447,11 @@ class CameraBackupWorker @AssistedInject constructor(
                 }
             }
 
+            // Explicitly dismiss the ongoing progress notification upon backup completion
+            try {
+                androidx.core.app.NotificationManagerCompat.from(context).cancel(com.telegramdrive.app.utils.NotificationHelper.PROGRESS_NOTIFICATION_ID)
+            } catch (_: Exception) {}
+
             // Record completed backup timestamp, show completion notification & clean up temporary upload cache
             com.telegramdrive.app.utils.NotificationHelper.showCompletionNotification(context, totalFiles)
             settingsDataStore.setLastBackupCompletedTime(System.currentTimeMillis())
@@ -447,6 +462,9 @@ class CameraBackupWorker @AssistedInject constructor(
             e.printStackTrace()
             return Result.retry()
         } finally {
+            try {
+                androidx.core.app.NotificationManagerCompat.from(context).cancel(com.telegramdrive.app.utils.NotificationHelper.PROGRESS_NOTIFICATION_ID)
+            } catch (_: Exception) {}
             try {
                 wakeLock?.release()
             } catch (_: Exception) {}
