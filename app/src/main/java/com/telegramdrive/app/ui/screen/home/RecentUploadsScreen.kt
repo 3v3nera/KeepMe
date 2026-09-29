@@ -10,6 +10,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.ArrowDropDown
+import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -24,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.telegramdrive.app.domain.model.FileType
 import com.telegramdrive.app.domain.model.TelegramFile
+import com.telegramdrive.app.domain.model.selectionKey
 import com.telegramdrive.app.ui.components.PrismalSortBar
 import com.telegramdrive.app.ui.components.SelectionBarActions
 import com.telegramdrive.app.ui.components.WaterfallGrid
@@ -46,13 +49,17 @@ fun RecentUploadsScreen(
     val sortOption by viewModel.sortOption.collectAsState()
     val sortDirection by viewModel.sortDirection.collectAsState()
     val selectedFilter by viewModel.selectedFilter.collectAsState()
+    val selectedDateFilter by viewModel.selectedDateFilter.collectAsState()
+    val availableMonths by viewModel.availableMonths.collectAsState()
     val selectedFileIds by viewModel.selectedFileIds.collectAsState()
     val inSelectionMode = selectedFileIds.isNotEmpty()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
 
     val gridState = androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState()
 
-    LaunchedEffect(sortOption, sortDirection, selectedFilter) {
+    var showDateFilterSheet by remember { mutableStateOf(false) }
+
+    LaunchedEffect(sortOption, sortDirection, selectedFilter, selectedDateFilter) {
         gridState.scrollToItem(0)
     }
 
@@ -68,7 +75,7 @@ fun RecentUploadsScreen(
                     selectedCount = selectedFileIds.size,
                     onDelete = { viewModel.deleteSelected() },
                     onShare = {
-                        val selectedFiles = viewModel.files.value.filter { it.messageId in viewModel.selectedFileIds.value }
+                        val selectedFiles = viewModel.files.value.filter { it.selectionKey in viewModel.selectedFileIds.value }
                         selectedFiles.forEach { file ->
                             FileOpenUtils.shareFileInExternalApp(context, file)
                         }
@@ -97,37 +104,19 @@ fun RecentUploadsScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
+            Column(modifier = Modifier.fillMaxSize()) {
                 // Top Header
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 20.dp),
+                        .padding(horizontal = 16.dp, vertical = 24.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Surface(
-                        shape = CircleShape,
-                        color = Color.White,
-                        shadowElevation = 2.dp,
-                        modifier = Modifier.size(46.dp)
-                    ) {
-                        AnimatedContent(
-                            targetState = inSelectionMode,
-                            transitionSpec = { TDriveMotion.iconMorphIn },
-                            label = "headerIcon"
-                        ) { inSelection ->
-                            IconButton(onClick = {
-                                haptics.click()
-                                if (inSelection) viewModel.clearSelection() else onBack()
-                            }) {
-                                Icon(
-                                    imageVector = if (inSelection) Icons.Rounded.Close else Icons.AutoMirrored.Rounded.ArrowBack,
-                                    contentDescription = if (inSelection) "Clear Selection" else "Back",
-                                    tint = Color(0xFF2C2C2E)
-                                )
-                            }
-                        }
-                    }
+                    com.telegramdrive.app.ui.components.ScreenBackButton(
+                        onBack = onBack,
+                        inSelectionMode = inSelectionMode,
+                        onClearSelection = { viewModel.clearSelection() }
+                    )
                     Spacer(modifier = Modifier.width(16.dp))
 
                     AnimatedContent(
@@ -138,14 +127,14 @@ fun RecentUploadsScreen(
                         Column {
                             Text(
                                 text = title,
-                                style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
-                                color = TDriveColors.OnBackground
+                                style = com.telegramdrive.app.ui.components.screenTitleStyle(),
+                                color = com.telegramdrive.app.ui.theme.TDriveColors.OnCanvas
                             )
                             if (!inSelectionMode) {
                                 Text(
                                     text = "${files.size} items in your cloud vault",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = TDriveColors.OnSurfaceDim
+                                    color = com.telegramdrive.app.ui.theme.TDriveColors.OnCanvasMuted
                                 )
                             }
                         }
@@ -220,6 +209,83 @@ fun RecentUploadsScreen(
                     onToggleSortDirection = { viewModel.toggleSortDirection() }
                 )
 
+                // ── Date & Month Filter Pill ──
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable {
+                                haptics.click()
+                                showDateFilterSheet = true
+                            },
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (selectedDateFilter != null) com.telegramdrive.app.ui.theme.TDriveColors.OnCanvas else com.telegramdrive.app.ui.theme.TDriveColors.FillSoft,
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            if (selectedDateFilter != null) com.telegramdrive.app.ui.theme.TDriveColors.OnCanvas else com.telegramdrive.app.ui.theme.TDriveColors.LineSoft
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                Icons.Rounded.CalendarMonth,
+                                contentDescription = "Date Filter",
+                                tint = if (selectedDateFilter != null) Color(0xFF0B0C0F) else com.telegramdrive.app.ui.theme.TDriveColors.OnCanvas,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = selectedDateFilter?.displayName ?: "Filter by Date / Month",
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                                color = if (selectedDateFilter != null) Color(0xFF0B0C0F) else com.telegramdrive.app.ui.theme.TDriveColors.OnCanvas
+                            )
+                            if (selectedDateFilter != null) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(18.dp)
+                                        .clip(CircleShape)
+                                        .background(Color.Black.copy(alpha = 0.14f))
+                                        .clickable {
+                                            haptics.click()
+                                            viewModel.setDateFilter(null)
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        Icons.Rounded.Close,
+                                        contentDescription = "Clear Filter",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                }
+                            } else {
+                                Icon(
+                                    Icons.Rounded.ArrowDropDown,
+                                    contentDescription = null,
+                                    tint = com.telegramdrive.app.ui.theme.TDriveColors.OnCanvasMuted,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    if (selectedDateFilter != null) {
+                        Text(
+                            text = "${files.size} ${if (files.size == 1) "item" else "items"}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = com.telegramdrive.app.ui.theme.TDriveColors.OnCanvasMuted
+                        )
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Box(modifier = Modifier.weight(1f)) {
@@ -228,11 +294,26 @@ fun RecentUploadsScreen(
                             modifier = Modifier.fillMaxSize(),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(
-                                text = "No recent files found",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = TDriveColors.OnSurfaceDim
-                            )
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = if (selectedDateFilter != null) "No files found for \"${selectedDateFilter?.displayName}\"" else "No recent files found",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = com.telegramdrive.app.ui.theme.TDriveColors.OnCanvasMuted
+                                )
+                                if (selectedDateFilter != null) {
+                                    TextButton(
+                                        onClick = {
+                                            haptics.click()
+                                            viewModel.setDateFilter(null)
+                                        }
+                                    ) {
+                                        Text("Show All Dates", color = com.telegramdrive.app.ui.theme.TDriveColors.OnCanvas, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
                         }
                     } else {
                         WaterfallGrid(
@@ -240,18 +321,19 @@ fun RecentUploadsScreen(
                             gridState = gridState,
                             groupByMonth = (sortOption == com.telegramdrive.app.ui.screen.folders.SortOption.DATE),
                             selectedFileIds = selectedFileIds,
+                            selectionKey = { it.selectionKey },
                             inSelectionMode = inSelectionMode,
                             onFileClick = { file ->
                                 if (inSelectionMode) {
-                                    viewModel.toggleSelection(file.messageId)
+                                    viewModel.toggleSelection(file.selectionKey)
                                 } else {
                                     onFileClick(file)
                                 }
                             },
                             onFileLongPress = { file ->
-                                viewModel.toggleSelection(file.messageId)
+                                viewModel.toggleSelection(file.selectionKey)
                             },
-                            onFileDragSelect = { file -> viewModel.selectFileById(file.messageId) },
+                            onFileDragSelect = { file -> viewModel.selectFileById(file.selectionKey) },
                             onFileVisible = { file -> viewModel.requestThumbnail(file.thumbnailFileId) },
                             modifier = Modifier.fillMaxSize()
                         )
@@ -259,6 +341,17 @@ fun RecentUploadsScreen(
                 }
             }
         }
+    }
+
+    if (showDateFilterSheet) {
+        com.telegramdrive.app.ui.components.DateMonthFilterSheet(
+            activeFilter = selectedDateFilter,
+            availableMonths = availableMonths,
+            onSelectFilter = { filter ->
+                viewModel.setDateFilter(filter)
+            },
+            onDismiss = { showDateFilterSheet = false }
+        )
     }
 }
 
@@ -270,10 +363,10 @@ private fun FilterPill(
 ) {
     Surface(
         shape = RoundedCornerShape(20.dp),
-        color = if (isSelected) TDriveColors.Primary else TDriveColors.SurfaceElevated,
+        color = if (isSelected) TDriveColors.OnCanvas else TDriveColors.FillSoft,
         border = androidx.compose.foundation.BorderStroke(
             1.dp,
-            if (isSelected) TDriveColors.Primary else TDriveColors.OutlineVariant
+            if (isSelected) TDriveColors.OnCanvas else TDriveColors.LineSoft
         ),
         modifier = Modifier
             .clip(RoundedCornerShape(20.dp))
@@ -282,7 +375,7 @@ private fun FilterPill(
         Text(
             text = label,
             style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-            color = if (isSelected) Color.White else TDriveColors.OnBackground,
+            color = if (isSelected) Color(0xFF0B0C0F) else TDriveColors.OnCanvas,
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)
         )
     }

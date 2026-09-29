@@ -1,14 +1,21 @@
 package com.telegramdrive.app.ui.screen.auth
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.telegramdrive.app.ui.components.GlassPanelTokens
+import com.telegramdrive.app.ui.components.GlassPrimaryButton
+import com.telegramdrive.app.ui.components.GlassTextField
 import com.telegramdrive.app.ui.theme.TDriveColors
 import com.telegramdrive.app.ui.utils.rememberAppHaptics
 
@@ -18,6 +25,24 @@ fun OtpVerificationScreen(
 ) {
     val haptics = rememberAppHaptics()
     var code by remember { mutableStateOf("") }
+    var submitted by remember { mutableStateOf(false) }
+
+    // If the server bounces us back (wrong code/password) the same screen stays up,
+    // so release the loading state after a few seconds and let the user retry
+    LaunchedEffect(submitted) {
+        if (submitted) {
+            kotlinx.coroutines.delay(8000)
+            submitted = false
+        }
+    }
+
+    val submit = {
+        if (code.isNotBlank() && !submitted) {
+            haptics.click()
+            submitted = true
+            onSubmit(code)
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -29,17 +54,18 @@ fun OtpVerificationScreen(
         Text(
             text = "Check your Telegram",
             style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
-            color = TDriveColors.OnSurface
+            color = com.telegramdrive.app.ui.theme.TDriveColors.OnCanvas
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = "We've sent the code to the Telegram app on your other device.",
             style = MaterialTheme.typography.bodyMedium,
-            color = TDriveColors.OnSurfaceDim
+            color = TDriveColors.OnCanvasMuted,
+            textAlign = TextAlign.Center
         )
         Spacer(modifier = Modifier.height(32.dp))
 
-        OutlinedTextField(
+        GlassTextField(
             value = code,
             onValueChange = { input ->
                 val filtered = input.filter { it.isDigit() }
@@ -47,37 +73,20 @@ fun OtpVerificationScreen(
                     haptics.tick()
                 }
                 code = filtered
+                submitted = false
             },
-            label = { Text("Code") },
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = TDriveColors.Primary,
-                unfocusedBorderColor = TDriveColors.Outline,
-                focusedContainerColor = TDriveColors.SurfaceElevated,
-                unfocusedContainerColor = TDriveColors.SurfaceElevated,
-                focusedTextColor = Color.White,
-                unfocusedTextColor = Color.White,
-                focusedLabelColor = TDriveColors.Primary,
-                unfocusedLabelColor = TDriveColors.OnSurfaceDim
-            )
+            placeholder = "Code",
+            textAlign = TextAlign.Center,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { submit() })
         )
         Spacer(modifier = Modifier.height(32.dp))
 
-        Button(
-            onClick = {
-                if (code.isNotBlank()) {
-                    haptics.click()
-                    onSubmit(code)
-                }
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp),
-            shape = RoundedCornerShape(28.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = TDriveColors.Primary)
-        ) {
-            Text("Verify", color = Color.White, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
-        }
+        GlassPrimaryButton(
+            text = "Verify",
+            onClick = { submit() },
+            loading = submitted,
+            modifier = Modifier.fillMaxWidth()
+        )
     }
 }

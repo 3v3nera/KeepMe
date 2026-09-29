@@ -6,8 +6,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DeleteSweep
+import androidx.compose.material.icons.rounded.DeleteForever
+import androidx.compose.material.icons.rounded.Restore
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -40,41 +45,34 @@ fun TrashScreen(
     // Dialog when clicking on an individual trashed file
     if (selectedTrashFile != null) {
         val file = selectedTrashFile!!
-        AlertDialog(
-            onDismissRequest = { selectedTrashFile = null },
-            title = {
-                Text(
-                    text = file.fileName,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            },
-            text = { Text("What would you like to do with this file?") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        haptics.click()
-                        viewModel.restoreFile(file)
-                        selectedTrashFile = null
-                    }
-                ) {
-                    Text("Restore File", color = Color(0xFF00E5A0))
-                }
-            },
-            dismissButton = {
-                Row {
-                    TextButton(
+        com.telegramdrive.app.ui.components.GlassAlertDialog(
+            title = file.fileName,
+            message = "What would you like to do with this file?",
+            onDismiss = { selectedTrashFile = null },
+            body = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    com.telegramdrive.app.ui.components.GlassActionRow(
+                        icon = Icons.Rounded.Restore,
+                        title = "Restore File",
+                        subtitle = "Move it back to your drive",
+                        tint = Color(0xFF00E5A0),
+                        onClick = {
+                            haptics.click()
+                            viewModel.restoreFile(file)
+                            selectedTrashFile = null
+                        }
+                    )
+                    com.telegramdrive.app.ui.components.GlassActionRow(
+                        icon = Icons.Rounded.DeleteForever,
+                        title = "Delete Permanently",
+                        subtitle = "This cannot be undone",
+                        tint = Color(0xFFFF8A80),
                         onClick = {
                             haptics.heavyClick()
                             viewModel.deletePermanently(file)
                             selectedTrashFile = null
                         }
-                    ) {
-                        Text("Delete Permanently", color = MaterialTheme.colorScheme.error)
-                    }
-                    TextButton(onClick = { selectedTrashFile = null }) {
-                        Text("Cancel")
-                    }
+                    )
                 }
             }
         )
@@ -82,43 +80,33 @@ fun TrashScreen(
 
     // Dialog for emptying all trash
     if (showEmptyTrashDialog) {
-        AlertDialog(
-            onDismissRequest = { showEmptyTrashDialog = false },
-            title = { Text("Empty Trash") },
-            text = { Text("Permanently delete all ${trashFiles.size} items? They will be removed from your Telegram account completely and cannot be recovered.") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        haptics.heavyClick()
-                        viewModel.emptyTrash()
-                        showEmptyTrashDialog = false
-                    }
-                ) {
-                    Text("Empty Trash", color = MaterialTheme.colorScheme.error)
-                }
+        com.telegramdrive.app.ui.components.GlassAlertDialog(
+            title = "Empty Trash",
+            message = "Permanently delete all ${trashFiles.size} items? They will be removed from your Telegram account completely and cannot be recovered.",
+            confirmText = "Empty Trash",
+            destructive = true,
+            heroIcon = Icons.Rounded.DeleteSweep,
+            heroTint = Color(0xFFFF453A),
+            onConfirm = {
+                haptics.heavyClick()
+                viewModel.emptyTrash()
+                showEmptyTrashDialog = false
             },
-            dismissButton = {
-                TextButton(onClick = { showEmptyTrashDialog = false }) {
-                    Text("Cancel")
-                }
-            }
+            onDismiss = { showEmptyTrashDialog = false }
         )
     }
-
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         containerColor = Color.Transparent,
         floatingActionButton = {
             if (trashFiles.isNotEmpty()) {
-                ExtendedFloatingActionButton(
+                com.telegramdrive.app.ui.components.GlassPrimaryButton(
+                    text = "Empty Trash",
+                    destructive = true,
                     onClick = {
                         haptics.error()
                         showEmptyTrashDialog = true
-                    },
-                    icon = { Icon(Icons.Rounded.DeleteSweep, contentDescription = "Empty Trash") },
-                    text = { Text("Empty Trash") },
-                    containerColor = MaterialTheme.colorScheme.errorContainer,
-                    contentColor = MaterialTheme.colorScheme.onErrorContainer
+                    }
                 )
             }
         }
@@ -143,29 +131,36 @@ fun TrashScreen(
                         .padding(horizontal = 16.dp, vertical = 24.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Surface(
-                        shape = CircleShape,
-                        color = Color.White,
-                        shadowElevation = 2.dp,
-                        modifier = Modifier.size(48.dp)
-                    ) {
-                        IconButton(onClick = {
-                            haptics.click()
-                            onBack()
-                        }) {
-                            Icon(
-                                imageVector = Icons.Rounded.ArrowBack,
-                                contentDescription = "Back",
-                                tint = Color(0xFF2C2C2E)
-                            )
-                        }
-                    }
+                    com.telegramdrive.app.ui.components.ScreenBackButton(onBack = onBack)
                     Spacer(modifier = Modifier.width(16.dp))
-                    Text(
-                        text = "Trash",
-                        style = MaterialTheme.typography.displaySmall,
-                        color = Color.White
-                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Trash",
+                            style = com.telegramdrive.app.ui.components.screenTitleStyle(),
+                            color = com.telegramdrive.app.ui.theme.TDriveColors.OnCanvas
+                        )
+                        Text(
+                            text = if (trashFiles.isEmpty()) "Deleted files wait here for 30 days"
+                            else "${trashFiles.size} items · deleted for good after 30 days",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = com.telegramdrive.app.ui.theme.TDriveColors.OnCanvasMuted
+                        )
+                    }
+                    if (trashFiles.isNotEmpty()) {
+                        Text(
+                            text = "Restore all",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = com.telegramdrive.app.ui.theme.TDriveColors.Accent,
+                            modifier = Modifier
+                                .clip(androidx.compose.foundation.shape.CircleShape)
+                                .border(1.dp, com.telegramdrive.app.ui.theme.TDriveColors.LineSoft, androidx.compose.foundation.shape.CircleShape)
+                                .clickable {
+                                    haptics.click()
+                                    viewModel.restoreAll()
+                                }
+                                .padding(horizontal = 14.dp, vertical = 8.dp)
+                        )
+                    }
                 }
 
                 if (trashFiles.isEmpty()) {
@@ -178,13 +173,13 @@ fun TrashScreen(
                                 imageVector = Icons.Rounded.Delete,
                                 contentDescription = "Empty",
                                 modifier = Modifier.size(64.dp),
-                                tint = Color.White.copy(alpha = 0.5f)
+                                tint = com.telegramdrive.app.ui.theme.TDriveColors.OnCanvasFaint
                             )
                             Spacer(modifier = Modifier.height(16.dp))
                             Text(
                                 text = "Your trash is completely empty! 🧹",
                                 style = MaterialTheme.typography.titleMedium,
-                                color = Color.White.copy(alpha = 0.7f)
+                                color = com.telegramdrive.app.ui.theme.TDriveColors.OnCanvasMuted
                             )
                         }
                     }
@@ -199,6 +194,13 @@ fun TrashScreen(
                         },
                         onFileVisible = { file ->
                             viewModel.requestThumbnail(file.thumbnailFileId)
+                        },
+                        itemBadge = { file ->
+                            val trashedAt = file.trashedAt
+                            if (trashedAt == null) null else {
+                                val daysLeft = (30 - (System.currentTimeMillis() - trashedAt) / 86_400_000L).coerceAtLeast(0)
+                                if (daysLeft == 0L) "today" else "${daysLeft}d left"
+                            }
                         },
                         modifier = Modifier.fillMaxSize()
                     )

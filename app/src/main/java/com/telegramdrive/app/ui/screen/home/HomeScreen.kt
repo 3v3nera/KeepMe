@@ -1,35 +1,44 @@
 package com.telegramdrive.app.ui.screen.home
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.unit.lerp
-import kotlinx.coroutines.delay
-import com.telegramdrive.app.R
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.ChevronRight
-import androidx.compose.material.icons.rounded.Notifications
+import androidx.compose.material.icons.rounded.CloudUpload
+import androidx.compose.material.icons.rounded.CreateNewFolder
+import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material3.*
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -40,38 +49,45 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.telegramdrive.app.domain.model.TelegramFile
-import com.telegramdrive.app.ui.components.FileCard
-import com.telegramdrive.app.ui.components.TDriveSwitch
-import com.telegramdrive.app.ui.theme.TDriveColors
-import com.telegramdrive.app.ui.theme.TDriveMotion
-import com.telegramdrive.app.utils.formatRelativeTime
-import androidx.compose.material.icons.rounded.CloudUpload
-import androidx.compose.foundation.shape.RoundedCornerShape
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
-
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import coil.compose.AsyncImage
-import java.io.File
-
-import com.telegramdrive.app.ui.components.screenTabSwipe
-import com.telegramdrive.app.ui.utils.rememberAppHaptics
+import com.telegramdrive.app.domain.model.FileType
+import com.telegramdrive.app.domain.model.TelegramFile
 import com.telegramdrive.app.domain.update.UpdateDownloadState
+import com.telegramdrive.app.ui.components.BentoCard
+import com.telegramdrive.app.ui.components.FileCard
+import com.telegramdrive.app.ui.components.IconCircleButton
+import com.telegramdrive.app.ui.components.MonthPhotoCard
+import com.telegramdrive.app.ui.components.NavBarMetrics
+import com.telegramdrive.app.ui.components.SearchPill
+import com.telegramdrive.app.ui.components.SectionHeader
+import com.telegramdrive.app.ui.components.TDriveSwitch
+import com.telegramdrive.app.ui.components.TwoToneTitle
+import com.telegramdrive.app.ui.components.formatFileSize
+import com.telegramdrive.app.ui.components.screenTabSwipe
 import com.telegramdrive.app.ui.screen.home.components.LiveUpdateDownloadDialog
 import com.telegramdrive.app.ui.screen.home.components.UpdateAvailableBanner
 import com.telegramdrive.app.ui.screen.home.components.UpdatePromptDialog
+import com.telegramdrive.app.ui.theme.TDriveColors
+import com.telegramdrive.app.ui.utils.rememberAppHaptics
+import com.telegramdrive.app.utils.formatRelativeTime
+import java.io.File
 
 /** Session holder to track whether the cold-start splash animation has played */
 object AppSessionState {
     var hasPlayedSplash: Boolean by mutableStateOf(false)
+    var updatePromptShownForVersion: Int = -1
 }
+
+private val VideoColor = Color(0xFFFF6B9A)
+private val ImageColor = Color(0xFF7C9BFF)
+private val DocColor = TDriveColors.Accent
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -81,84 +97,40 @@ fun HomeScreen(
     onNavigateToSearch: () -> Unit = {},
     onNavigateToSettings: () -> Unit,
     onNavigateToRecentUploads: () -> Unit = {},
+    onNavigateToTrash: () -> Unit = {},
+    onNewFolderClick: () -> Unit = {},
     onFileClick: (TelegramFile) -> Unit,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val haptics = rememberAppHaptics()
-    val recentFiles by viewModel.recentFiles.collectAsState()
     val favoriteFiles by viewModel.favoriteFiles.collectAsState()
     val storageStats by viewModel.storageStats.collectAsState()
+    val monthCovers by viewModel.monthCovers.collectAsState()
     val currentUser by viewModel.currentUser.collectAsState()
     val userProfilePhotoPath by viewModel.userProfilePhotoPath.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
+    val isBackupEnabled by viewModel.isBackupEnabled.collectAsState()
+    val lastBackupTime by viewModel.lastBackupTime.collectAsState()
 
-
-    val greeting = remember(isRefreshing) {
-        val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
-        val greetings = when (hour) {
-            in 0..4 -> listOf(
-                "Up so late",
-                "Still awake",
-                "Night owl hours",
-                "Burning midnight oil",
-                "Can't sleep"
-            )
-            in 5..7 -> listOf(
-                "Early start",
-                "Rise and shine",
-                "Up with the sun",
-                "Fresh morning",
-                "Early bird"
-            )
-            in 8..11 -> listOf(
-                "Good morning",
-                "Have a great day",
-                "Ready to conquer",
-                "Bright and early",
-                "Morning vibes"
-            )
-            in 12..16 -> listOf(
-                "Good afternoon",
-                "Midday hustle",
-                "Day going well",
-                "Halfway through",
-                "Afternoon grind"
-            )
-            in 17..21 -> listOf(
-                "Good evening",
-                "Unwinding time",
-                "Evening calm",
-                "Wrapping up the day",
-                "Time to relax"
-            )
-            else -> listOf(
-                "Winding down",
-                "Calling it a night",
-                "Rest well soon",
-                "Late evening peace",
-                "Ready for bed"
-            )
-        }
-        greetings.random()
-    }
-
-    // ── Staggered entrance flag — true after first composition ──
     var entered by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         entered = true
-        viewModel.refresh()
+        // Cheap refresh on every visit; the full re-crawl only happens on pull-to-refresh
+        viewModel.refresh(userInitiated = false)
     }
-
-
 
     val availableUpdate by viewModel.availableUpdate.collectAsState()
     val downloadState by viewModel.updateDownloadState.collectAsState()
     var showDownloadDialog by remember { mutableStateOf(false) }
     var showUpdatePromptDialog by remember { mutableStateOf(false) }
 
-    // When an update is detected, automatically prompt the user immediately!
     LaunchedEffect(availableUpdate) {
-        if (availableUpdate != null && downloadState is UpdateDownloadState.Idle) {
+        val update = availableUpdate
+        // Prompt once per version per app session, not on every return to the Home tab
+        if (update != null && downloadState is UpdateDownloadState.Idle &&
+            AppSessionState.updatePromptShownForVersion != update.versionCode
+        ) {
+            AppSessionState.updatePromptShownForVersion = update.versionCode
             showUpdatePromptDialog = true
         }
     }
@@ -169,15 +141,20 @@ fun HomeScreen(
         }
     }
 
+    // Ask TDLib for cover thumbnails that have not been fetched yet
+    LaunchedEffect(monthCovers) {
+        monthCovers.take(4).forEach { cover ->
+            if (cover.coverPath == null) viewModel.requestThumbnail(cover.coverThumbnailFileId)
+        }
+    }
+
     val topPadding = WindowInsets.systemBars.asPaddingValues().calculateTopPadding()
+    val firstName = currentUser?.firstName?.takeIf { it.isNotBlank() } ?: "there"
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .screenTabSwipe(
-                onSwipeNext = onNavigateToSearch,
-                onSwipePrev = {}
-            )
+            .screenTabSwipe(onSwipeNext = onNavigateToSearch, onSwipePrev = {})
     ) {
         PullToRefreshBox(
             isRefreshing = isRefreshing,
@@ -189,332 +166,180 @@ fun HomeScreen(
         ) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(top = topPadding + 16.dp, bottom = 120.dp)
+                contentPadding = PaddingValues(top = topPadding + 12.dp, bottom = NavBarMetrics.contentBottomPadding),
+                verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
-                // Top Header — slides down on entry
+                // ── Header: avatar + settings ──
                 item {
                     AnimatedVisibility(
                         visible = entered,
-                        enter = slideInVertically(tween(320)) { -it / 2 } + fadeIn(tween(280))
+                        enter = slideInVertically(tween(320)) { -it / 3 } + fadeIn(tween(280))
                     ) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            // Top Center Brand Logo
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 4.dp, bottom = 14.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Image(
-                                    painter = painterResource(id = R.drawable.ic_keepme_wordmark),
-                                    contentDescription = "KeepMe Logo",
-                                    modifier = Modifier.height(28.dp),
-                                    contentScale = ContentScale.Fit
-                                )
-                            }
-
+                        Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(start = 24.dp, end = 24.dp, bottom = 24.dp),
+                                    .padding(horizontal = 24.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(48.dp)
-                                            .clip(CircleShape)
-                                            .background(
-                                                Brush.linearGradient(
-                                                    listOf(Color(0xFFFFB74D), Color(0xFFFF8A65))
-                                                )
-                                            ),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        if (!userProfilePhotoPath.isNullOrBlank() && File(userProfilePhotoPath!!).exists()) {
-                                            AsyncImage(
-                                                model = File(userProfilePhotoPath!!),
-                                                contentDescription = "Profile Photo",
-                                                contentScale = ContentScale.Crop,
-                                                modifier = Modifier.fillMaxSize()
-                                            )
-                                        } else {
-                                            Text(
-                                                text = currentUser?.firstName?.take(1) ?: "U",
-                                                color = Color.White,
-                                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                                            )
-                                        }
-                                    }
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Column {
-                                        Text(
-                                            text = greeting,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = Color.White.copy(alpha = 0.8f)
+                                Box(
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .clip(CircleShape)
+                                        .background(TDriveColors.SurfaceElevated)
+                                        .border(1.dp, TDriveColors.LineSoft, CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (!userProfilePhotoPath.isNullOrBlank() && File(userProfilePhotoPath!!).exists()) {
+                                        AsyncImage(
+                                            model = File(userProfilePhotoPath!!),
+                                            contentDescription = "Profile Photo",
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier.fillMaxSize()
                                         )
+                                    } else {
                                         Text(
-                                            text = currentUser?.let { "${it.firstName} ${it.lastName}" } ?: "User",
-                                            style = MaterialTheme.typography.titleMedium,
-                                            color = Color.White
+                                            text = firstName.take(1).uppercase(),
+                                            color = TDriveColors.OnCanvas,
+                                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                                         )
                                     }
                                 }
-
-                                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                    Surface(
-                                        shape = CircleShape,
-                                        color = Color(0xFF2C2C2E),
-                                        modifier = Modifier
-                                            .size(48.dp)
-                                            .clip(CircleShape)
-                                            .clickable {
-                                                haptics.click()
-                                                onNavigateToSettings()
-                                            }
-                                    ) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Icon(
-                                                imageVector = Icons.Rounded.Settings,
-                                                contentDescription = "Settings",
-                                                tint = Color.White,
-                                                modifier = Modifier.size(22.dp)
-                                            )
-                                        }
-                                    }
+                                Box(
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .clip(CircleShape)
+                                        .background(TDriveColors.SurfaceElevated)
+                                        .border(1.dp, TDriveColors.LineSoft, CircleShape)
+                                        .clickable {
+                                            haptics.click()
+                                            onNavigateToSettings()
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Settings,
+                                        contentDescription = "Settings",
+                                        tint = TDriveColors.OnCanvas,
+                                        modifier = Modifier.size(22.dp)
+                                    )
                                 }
                             }
-                        }
-                    }
-                }
 
-                // OTA Update Available Banner
-                if (availableUpdate != null) {
-                    item {
-                        AnimatedVisibility(
-                            visible = entered,
-                            enter = slideInVertically(tween(340)) { it / 3 } + fadeIn(tween(300))
-                        ) {
-                            UpdateAvailableBanner(
-                                updateInfo = availableUpdate!!,
-                                onUpdateClick = {
-                                    haptics.click()
-                                    showDownloadDialog = true
-                                    viewModel.startUpdateDownload(availableUpdate!!)
-                                },
-                                onDismissClick = {
-                                    haptics.click()
-                                    viewModel.dismissUpdate(availableUpdate!!.versionCode)
-                                }
+                            TwoToneTitle(
+                                bold = "Hey, $firstName",
+                                muted = "What are we keeping today?",
+                                modifier = Modifier.padding(horizontal = 24.dp)
                             )
                         }
                     }
                 }
 
-                // Hero Title — slides up with slight delay
+                // ── Search pill (opens the Search tab) ──
                 item {
-                    AnimatedVisibility(
-                        visible = entered,
-                        enter = slideInVertically(tween(340, delayMillis = 60)) { it / 3 } + fadeIn(tween(300, delayMillis = 60))
-                    ) {
-                        Text(
-                            text = "Your stash,\nsafe and sound.",
-                            style = MaterialTheme.typography.displaySmall.copy(
-                                fontWeight = FontWeight.Bold
-                            ),
-                            color = Color.White,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 24.dp, vertical = 16.dp)
-                        )
-                    }
+                    SearchPill(
+                        placeholder = "Search your files",
+                        onClick = onNavigateToSearch,
+                        modifier = Modifier.padding(horizontal = 24.dp)
+                    )
                 }
 
-                // Storage Dashboard — fades in with delay
-                item {
-                    AnimatedVisibility(
-                        visible = entered,
-                        enter = fadeIn(tween(360, delayMillis = 100)) + slideInVertically(tween(340, delayMillis = 100)) { it / 4 }
-                    ) {
-                        StorageDashboard(
-                            stats = storageStats,
-                            modifier = Modifier.padding(horizontal = 8.dp)
-                        )
-                    }
-                }
-
-                item { Spacer(modifier = Modifier.height(16.dp)) }
-
-                // Camera Backup Toggle
-                item {
-                    val isBackupEnabled by viewModel.isBackupEnabled.collectAsState()
-                    val lastBackupTime by viewModel.lastBackupTime.collectAsState()
-
-                    AnimatedVisibility(
-                        visible = entered,
-                        enter = fadeIn(tween(380, delayMillis = 140)) + slideInVertically(tween(360, delayMillis = 140)) { it / 4 }
-                    ) {
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 24.dp, vertical = 8.dp)
-                                .clip(RoundedCornerShape(24.dp))
-                                .clickable {
-                                    haptics.click()
-                                    onNavigateToSettings()
-                                },
-                            shape = RoundedCornerShape(24.dp), // More rounded pill-like
-                            color = Color.White,
-                            shadowElevation = 4.dp
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically, 
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    // Rounded square icon with pale background
-                                    Surface(
-                                        shape = RoundedCornerShape(12.dp),
-                                        color = if (isBackupEnabled) Color(0xFFE8F5E9) else Color(0xFFFFE0B2),
-                                        modifier = Modifier.size(48.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Rounded.CloudUpload,
-                                            contentDescription = null,
-                                            tint = if (isBackupEnabled) Color(0xFF43A047) else Color(0xFFE65100),
-                                            modifier = Modifier.padding(12.dp)
-                                        )
-                                    }
-                                    Spacer(Modifier.width(16.dp))
-                                    Column {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Text(
-                                                "Auto-Backup & Sync",
-                                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                                color = Color(0xFF2C2C2E)
-                                            )
-                                            Spacer(Modifier.width(4.dp))
-                                            Icon(
-                                                Icons.Rounded.ChevronRight,
-                                                contentDescription = null,
-                                                tint = Color(0xFF6C8FFF),
-                                                modifier = Modifier.size(18.dp)
-                                            )
-                                        }
-                                        Text(
-                                            text = if (isBackupEnabled && lastBackupTime > 0L) {
-                                                "All caught up • Last: ${formatRelativeTime(lastBackupTime)}"
-                                            } else if (isBackupEnabled) {
-                                                "All caught up • Tap to configure"
-                                            } else {
-                                                "Paused • Tap to turn on"
-                                            },
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = Color(0xFFA0A0A5)
-                                        )
-                                    }
-                                }
-                                
-                                Spacer(modifier = Modifier.width(12.dp))
-                                
-                                TDriveSwitch(
-                                    checked = isBackupEnabled,
-                                    onCheckedChange = { enabled ->
-                                        viewModel.toggleBackup(enabled)
-                                    },
-                                    activeColor = Color(0xFF00E5A0),
-                                    inactiveColor = Color(0xFFE0E0E5)
-                                )
-                            }
-                        }
-                    }
-                }
-                // Recent Files Section
+                // ── Quick actions ──
                 item {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(start = 24.dp, end = 24.dp, top = 28.dp, bottom = 12.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                            .padding(horizontal = 24.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text(
-                            text = "Recent Stuff",
-                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                            color = Color.White
-                        )
-                        if (recentFiles.isNotEmpty()) {
-                            TextButton(onClick = {
-                                haptics.click()
-                                onNavigateToRecentUploads()
-                            }) {
-                                Text("See all", color = TDriveColors.Primary)
-                            }
-                        }
+                        IconCircleButton(Icons.Rounded.CreateNewFolder, "New folder", onNewFolderClick)
+                        IconCircleButton(Icons.Rounded.CloudUpload, "Back up now", { viewModel.backupNow() })
+                        IconCircleButton(Icons.Rounded.History, "Recent", onNavigateToRecentUploads)
+                        IconCircleButton(Icons.Rounded.DeleteOutline, "Trash", onNavigateToTrash)
                     }
                 }
 
-                if (recentFiles.isEmpty()) {
+                // ── Update banner ──
+                if (availableUpdate != null) {
                     item {
-                        Box(
+                        UpdateAvailableBanner(
+                            updateInfo = availableUpdate!!,
+                            onUpdateClick = {
+                                haptics.click()
+                                showDownloadDialog = true
+                                viewModel.startUpdateDownload(availableUpdate!!)
+                            },
+                            onDismissClick = {
+                                haptics.click()
+                                viewModel.dismissUpdate(availableUpdate!!.versionCode)
+                            }
+                        )
+                    }
+                }
+
+                // ── Bento: storage + backup ──
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(IntrinsicSize.Max)
+                            .padding(horizontal = 24.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        StorageBentoCard(
+                            stats = storageStats,
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 24.dp, vertical = 20.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "No recent files yet. Drop something in to get started!",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = TDriveColors.OnSurfaceDim
-                            )
-                        }
+                                .weight(1.25f)
+                                .fillMaxHeight()
+                        )
+                        BackupBentoCard(
+                            enabled = isBackupEnabled,
+                            lastBackupTime = lastBackupTime,
+                            onToggle = { viewModel.toggleBackup(it) },
+                            onOpen = onNavigateToSettings,
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                        )
+                    }
+                }
+
+                // ── Month photo cards ──
+                if (monthCovers.isEmpty()) {
+                    item {
+                        Text(
+                            text = "Nothing here yet. Drop something in to get started!",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = TDriveColors.OnCanvasMuted,
+                            modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp)
+                        )
                     }
                 } else {
                     item {
-                        LazyRow(
-                            contentPadding = PaddingValues(horizontal = 24.dp),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            items(recentFiles, key = { "${it.chatId}_${it.messageId}" }) { file ->
-                                Box(modifier = Modifier.width(180.dp)) {
-                                    FileCard(
-                                        file = file,
-                                        onClick = { onFileClick(file) },
-                                        onLongPress = { },
-                                        onVisible = { viewModel.requestThumbnail(file.thumbnailFileId) }
-                                    )
-                                }
-                            }
-                        }
+                        SectionHeader(
+                            title = "Your months",
+                            action = "See all",
+                            onAction = onNavigateToRecentUploads
+                        )
+                    }
+                    items(monthCovers.take(3), key = { "month_${it.filter.year}_${it.filter.month}" }) { cover ->
+                        MonthPhotoCard(
+                            title = cover.filter.displayName,
+                            count = cover.count,
+                            coverPath = cover.coverPath,
+                            onClick = {
+                                HomeMonthLink.pending = cover.filter
+                                onNavigateToRecentUploads()
+                            },
+                            modifier = Modifier.padding(horizontal = 24.dp)
+                        )
                     }
                 }
 
-                // Favorite Files Section (if any)
+                // ── Favorites ──
                 if (favoriteFiles.isNotEmpty()) {
-                    item {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Favorites",
-                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                                color = Color.White
-                            )
-                        }
-                    }
+                    item { SectionHeader(title = "Favorites") }
                     item {
                         LazyRow(
                             contentPadding = PaddingValues(horizontal = 24.dp),
@@ -556,6 +381,10 @@ fun HomeScreen(
                     haptics.click()
                     showDownloadDialog = false
                     viewModel.resetDownloadState()
+                },
+                onRetryClick = {
+                    haptics.click()
+                    viewModel.startUpdateDownload(availableUpdate!!)
                 }
             )
         }
@@ -579,46 +408,136 @@ fun HomeScreen(
     }
 }
 
+/** Total used space plus a proportional bar and per-type counts. */
 @Composable
-fun FilterChip(
-    label: String,
-    count: Int,
-    isSelected: Boolean
+private fun StorageBentoCard(
+    stats: List<com.telegramdrive.app.domain.model.StorageStat>,
+    modifier: Modifier = Modifier
 ) {
-    val chipColor by animateColorAsState(
-        targetValue = if (isSelected) TDriveColors.Primary else Color.White,
-        animationSpec = tween(TDriveMotion.chipSwitchMs),
-        label = "filterChipColor"
-    )
+    val video = stats.filter { it.fileType == FileType.VIDEO }
+    val image = stats.filter { it.fileType == FileType.IMAGE }
+    val docs = stats.filter { it.fileType != FileType.VIDEO && it.fileType != FileType.IMAGE }
+    val videoBytes = video.sumOf { it.totalSize }
+    val imageBytes = image.sumOf { it.totalSize }
+    val docBytes = docs.sumOf { it.totalSize }
+    val total = videoBytes + imageBytes + docBytes
 
-    Surface(
-        shape = CircleShape,
-        color = chipColor,
-        modifier = Modifier.height(48.dp)
-    ) {
+    BentoCard(modifier = modifier) {
+        Text(
+            text = "Storage",
+            style = MaterialTheme.typography.labelLarge,
+            color = TDriveColors.OnCanvasMuted
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = formatFileSize(total),
+            style = MaterialTheme.typography.headlineMedium.copy(
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace
+            ),
+            color = TDriveColors.OnCanvas
+        )
+        Spacer(Modifier.height(14.dp))
+        // proportional segmented bar
         Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(8.dp)
+                .clip(CircleShape)
+                .background(TDriveColors.FillSoft),
+            horizontalArrangement = Arrangement.spacedBy(2.dp)
         ) {
-            Surface(
-                shape = CircleShape,
-                color = Color.White,
-                modifier = Modifier.size(32.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        text = count.toString(),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = TDriveColors.OnSurface
-                    )
+            if (total > 0) {
+                listOf(videoBytes to VideoColor, imageBytes to ImageColor, docBytes to DocColor).forEach { (bytes, color) ->
+                    if (bytes > 0) {
+                        Box(
+                            modifier = Modifier
+                                .weight((bytes.toFloat() / total).coerceAtLeast(0.04f))
+                                .fillMaxHeight()
+                                .background(color)
+                        )
+                    }
                 }
             }
-            Spacer(modifier = Modifier.width(12.dp))
+        }
+        Spacer(Modifier.height(14.dp))
+        StorageLegendRow(VideoColor, "Videos", video.sumOf { it.fileCount })
+        StorageLegendRow(ImageColor, "Photos", image.sumOf { it.fileCount })
+        StorageLegendRow(DocColor, "Files", docs.sumOf { it.fileCount })
+    }
+}
+
+@Composable
+private fun StorageLegendRow(color: Color, label: String, count: Int) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 3.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .clip(CircleShape)
+                .background(color)
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = TDriveColors.OnCanvasMuted,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            text = count.toString(),
+            style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, fontSize = 12.sp),
+            color = TDriveColors.OnCanvas
+        )
+    }
+}
+
+/** Camera-backup status with an inline toggle. */
+@Composable
+private fun BackupBentoCard(
+    enabled: Boolean,
+    lastBackupTime: Long,
+    onToggle: (Boolean) -> Unit,
+    onOpen: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    BentoCard(modifier = modifier, onClick = onOpen) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Text(
-                text = label,
-                style = MaterialTheme.typography.bodyLarge,
-                color = TDriveColors.OnSurface
+                text = "Backup",
+                style = MaterialTheme.typography.labelLarge,
+                color = TDriveColors.OnCanvasMuted
+            )
+            TDriveSwitch(
+                checked = enabled,
+                onCheckedChange = onToggle,
+                activeColor = TDriveColors.Accent,
+                inactiveColor = Color.White.copy(alpha = 0.22f)
             )
         }
+        Spacer(Modifier.height(10.dp))
+        Text(
+            text = if (enabled) "On" else "Paused",
+            style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
+            color = if (enabled) TDriveColors.Accent else TDriveColors.OnCanvas
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = when {
+                enabled && lastBackupTime > 0L -> "Last run ${formatRelativeTime(lastBackupTime)}"
+                enabled -> "Waiting for the first run"
+                else -> "Tap to configure"
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = TDriveColors.OnCanvasMuted
+        )
     }
 }

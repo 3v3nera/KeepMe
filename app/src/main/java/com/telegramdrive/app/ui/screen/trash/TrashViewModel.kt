@@ -33,7 +33,7 @@ class TrashViewModel @Inject constructor(
         viewModelScope.launch {
             _isRefreshing.value = true
             try {
-                fileRepository.syncAllFolders()
+                fileRepository.syncAllFolders(force = true)
             } finally {
                 _isRefreshing.value = false
             }
@@ -49,6 +49,12 @@ class TrashViewModel @Inject constructor(
     fun deletePermanently(file: TelegramFile) {
         viewModelScope.launch {
             fileRepository.deletePermanently(file)
+        }
+    }
+
+    fun restoreAll() {
+        viewModelScope.launch {
+            trashFiles.value.forEach { fileRepository.restoreFromTrash(it.chatId, it.messageId) }
         }
     }
 

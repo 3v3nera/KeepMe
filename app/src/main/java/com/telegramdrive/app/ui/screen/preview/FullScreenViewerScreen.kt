@@ -18,6 +18,7 @@ import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -78,6 +79,20 @@ fun FullScreenViewerScreen(
     onSwipeProgress: ((Float) -> Unit)? = null,
     onClose: () -> Unit
 ) {
+    // The viewer is an immersive dark surface, so flip the status bar to light icons while it is open
+    val hostView = androidx.compose.ui.platform.LocalView.current
+    androidx.compose.runtime.DisposableEffect(hostView) {
+        var ctx: android.content.Context = hostView.context
+        while (ctx is android.content.ContextWrapper && ctx !is android.app.Activity) ctx = ctx.baseContext
+        val window = (ctx as? android.app.Activity)?.window
+        val controller = window?.let { androidx.core.view.WindowCompat.getInsetsController(it, hostView) }
+        val previous = controller?.isAppearanceLightStatusBars
+        controller?.isAppearanceLightStatusBars = false
+        onDispose {
+            if (controller != null && previous != null) controller.isAppearanceLightStatusBars = previous
+        }
+    }
+
     LaunchedEffect(folderId, fileId) {
         if (folderId != null && fileId != null) {
             viewModel.setTarget(folderId, fileId)
@@ -137,12 +152,13 @@ fun FullScreenViewerScreen(
         showChrome = true
     }
 
-    val dismissProgress = (swipeOffsetY.value / dismissThreshold).coerceIn(0f, 1f)
-    val bgAlpha = (1f - dismissProgress).coerceIn(0f, 1f)
-    val chromeAlpha = (1f - dismissProgress * 2.5f).coerceIn(0f, 1f)
+    // Read lazily (draw/layout phase only) so dragging never recomposes the whole viewer per frame
+    val dismissProgress: () -> Float = { (swipeOffsetY.value / dismissThreshold).coerceIn(0f, 1f) }
+    val bgAlpha: () -> Float = { (1f - dismissProgress()).coerceIn(0f, 1f) }
+    val chromeAlpha: () -> Float = { (1f - dismissProgress() * 2.5f).coerceIn(0f, 1f) }
 
-    LaunchedEffect(dismissProgress) {
-        onSwipeProgress?.invoke(dismissProgress)
+    LaunchedEffect(Unit) {
+        androidx.compose.runtime.snapshotFlow { dismissProgress() }.collect { onSwipeProgress?.invoke(it) }
     }
 
     val snackbarHostState = remember { SnackbarHostState() }
@@ -150,7 +166,7 @@ fun FullScreenViewerScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF05070E).copy(alpha = 0.55f * bgAlpha))
+            .drawBehind { drawRect(Color(0xFF05070E).copy(alpha = 0.96f * bgAlpha())) }
     ) {
         // ── 1. Stationary Ambient Backdrop (Pins to screen, blends during horizontal swipe, fades on pull-down) ──
         val currentPage = pagerState.currentPage
@@ -163,12 +179,16 @@ fun FullScreenViewerScreen(
         val horizontalProgress = abs(offsetFraction).coerceIn(0f, 1f)
 
         val currentFileForBg = files.getOrNull(currentPage)
-        val currentModel = currentFileForBg?.thumbnailPath?.takeIf { java.io.File(it).exists() }
-            ?: currentFileForBg?.localFilePath?.takeIf { java.io.File(it).exists() }
+        val currentModel = remember(currentFileForBg?.thumbnailPath, currentFileForBg?.localFilePath) {
+            currentFileForBg?.thumbnailPath?.takeIf { java.io.File(it).exists() }
+                ?: currentFileForBg?.localFilePath?.takeIf { java.io.File(it).exists() }
+        }
 
         val nextFileForBg = files.getOrNull(nextPageIndex)
-        val nextModel = nextFileForBg?.thumbnailPath?.takeIf { java.io.File(it).exists() }
-            ?: nextFileForBg?.localFilePath?.takeIf { java.io.File(it).exists() }
+        val nextModel = remember(nextFileForBg?.thumbnailPath, nextFileForBg?.localFilePath) {
+            nextFileForBg?.thumbnailPath?.takeIf { java.io.File(it).exists() }
+                ?: nextFileForBg?.localFilePath?.takeIf { java.io.File(it).exists() }
+        }
 
         // Current photo ambient background
         if (currentModel != null) {
@@ -179,10 +199,10 @@ fun FullScreenViewerScreen(
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .fillMaxSize()
-                    .blur(50.dp)
                     .graphicsLayer {
-                        alpha = (1f - horizontalProgress) * 0.45f * bgAlpha
+                        alpha = (1f - horizontalProgress) * 0.45f * bgAlpha()
                     }
+                    .blur(50.dp)
             )
         }
 
@@ -195,10 +215,10 @@ fun FullScreenViewerScreen(
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .fillMaxSize()
-                    .blur(50.dp)
                     .graphicsLayer {
-                        alpha = horizontalProgress * 0.45f * bgAlpha
+                        alpha = horizontalProgress * 0.45f * bgAlpha()
                     }
+                    .blur(50.dp)
             )
         }
 
@@ -209,9 +229,10 @@ fun FullScreenViewerScreen(
                 .prismalGlassLayer(backdrop)
                 .offset { IntOffset(0, swipeOffsetY.value.roundToInt()) }
                 .graphicsLayer {
-                    alpha = 1f - dismissProgress * 0.35f
-                    scaleX = 1f - dismissProgress * 0.12f
-                    scaleY = 1f - dismissProgress * 0.12f
+                    val progress = dismissProgress()
+                    alpha = 1f - progress * 0.35f
+                    scaleX = 1f - progress * 0.12f
+                    scaleY = 1f - progress * 0.12f
                 }
                 .pointerInput(currentPageScale, showInfo) {
                     if (currentPageScale > 1.1f) return@pointerInput
@@ -324,7 +345,7 @@ fun FullScreenViewerScreen(
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .padding(top = 40.dp, start = 8.dp)
-                .graphicsLayer { alpha = chromeAlpha }
+                .graphicsLayer { alpha = chromeAlpha() }
         ) {
             IconButton(
                 onClick = {
@@ -357,7 +378,7 @@ fun FullScreenViewerScreen(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(top = 44.dp, end = 16.dp)
-                    .graphicsLayer { alpha = chromeAlpha }
+                    .graphicsLayer { alpha = chromeAlpha() }
             ) {
                 Surface(
                     shape = RoundedCornerShape(12.dp),
@@ -381,7 +402,7 @@ fun FullScreenViewerScreen(
             exit  = fadeOut(tween(160)) + slideOutVertically(tween(200)) { it },
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .graphicsLayer { alpha = chromeAlpha }
+                .graphicsLayer { alpha = chromeAlpha() }
         ) {
             if (currentFile != null) {
                 MediaDetailsGlassSheet(
@@ -458,41 +479,26 @@ private fun MediaDetailsGlassSheet(
         }
     }
 
-    Box(
+    com.telegramdrive.app.ui.components.GlassPanel(
+        // Dark smoked panel: live glass over a bright photo washes the text out
+        backdrop = null,
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
             .padding(bottom = 20.dp)
             .navigationBarsPadding()
-            .shadow(12.dp, RoundedCornerShape(28.dp))
-            .drawPrismalGlass(
-                backdrop = backdrop,
-                shape = { PrismalRoundedRectangle(28.dp) },
-                effects = prismalGlassEffects(density)
-            )
-            .padding(horizontal = 20.dp, vertical = 14.dp)
     ) {
         Column(
             modifier = Modifier.fillMaxWidth()
         ) {
-            // ── Drag pill handle ──
-            Box(
-                modifier = Modifier
-                    .size(width = 38.dp, height = 4.dp)
-                    .background(Color.White.copy(alpha = 0.45f), CircleShape)
-                    .align(Alignment.CenterHorizontally)
-            )
-
-            Spacer(Modifier.height(14.dp))
-
             // ── Header: Icon + File Name + Upload Date ──
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Surface(
-                    shape = RoundedCornerShape(14.dp),
-                    color = Color.White.copy(alpha = 0.12f),
+                    shape = CircleShape,
+                    color = com.telegramdrive.app.ui.components.GlassPanelTokens.PillFill,
                     modifier = Modifier.size(44.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
@@ -528,72 +534,16 @@ private fun MediaDetailsGlassSheet(
 
             Spacer(Modifier.height(14.dp))
 
-            // ── Metadata chips row ──
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                // Size Badge (Electric Emerald in Monospace)
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = Color.White.copy(alpha = 0.12f)
-                ) {
-                    Text(
-                        text = sizeText,
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 11.sp
-                        ),
-                        color = Color(0xFF00E5A0),
-                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp)
-                    )
-                }
+            // ── Details as key/value rows (label left, value right, hairline between) ──
+            com.telegramdrive.app.ui.components.KeyValueRow(label = "Size", value = sizeText)
+            com.telegramdrive.app.ui.components.KeyValueRow(label = "Format", value = fileExt)
+            com.telegramdrive.app.ui.components.KeyValueRow(
+                label = "Stored in",
+                value = "Telegram Cloud",
+                showDivider = false
+            )
 
-                // Format Badge
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = Color.White.copy(alpha = 0.12f)
-                ) {
-                    Text(
-                        text = fileExt,
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 11.sp
-                        ),
-                        color = Color(0xFF6C8FFF),
-                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp)
-                    )
-                }
-
-                // Cloud Storage Badge
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = Color.White.copy(alpha = 0.12f)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Cloud,
-                            contentDescription = null,
-                            tint = Color.White.copy(alpha = 0.7f),
-                            modifier = Modifier.size(13.dp)
-                        )
-                        Spacer(Modifier.width(5.dp))
-                        Text(
-                            text = "Telegram Cloud",
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-                            color = Color.White.copy(alpha = 0.8f)
-                        )
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(16.dp))
-
+            Spacer(Modifier.height(12.dp))
             // ── Action Buttons Row ──
             Row(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -607,7 +557,7 @@ private fun MediaDetailsGlassSheet(
                         .height(50.dp)
                         .shadow(8.dp, CircleShape)
                         .background(
-                            color = if (saveResult?.startsWith("Saved") == true) Color(0xFF00E5A0) else Color(0xFF6C8FFF),
+                            color = if (saveResult?.startsWith("Saved") == true) Color(0xFF00E5A0) else Color.White,
                             shape = CircleShape
                         )
                         .clip(CircleShape)
@@ -625,13 +575,13 @@ private fun MediaDetailsGlassSheet(
                         if (isSaving) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(18.dp),
-                                color = Color.White,
+                                color = Color(0xFF0B0F1A),
                                 strokeWidth = 2.dp
                             )
                             Spacer(Modifier.width(8.dp))
                             Text(
                                 text = "Saving to your phone…",
-                                color = Color.White,
+                                color = Color(0xFF0B0F1A),
                                 style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold)
                             )
                         } else if (saveResult?.startsWith("Saved") == true) {
@@ -651,13 +601,13 @@ private fun MediaDetailsGlassSheet(
                             Icon(
                                 imageVector = Icons.Rounded.Download,
                                 contentDescription = null,
-                                tint = Color.White,
+                                tint = Color(0xFF0B0F1A),
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(Modifier.width(8.dp))
                             Text(
                                 text = "Save to Gallery",
-                                color = Color.White,
+                                color = Color(0xFF0B0F1A),
                                 style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold)
                             )
                         }
@@ -670,7 +620,7 @@ private fun MediaDetailsGlassSheet(
                         .size(50.dp)
                         .shadow(6.dp, CircleShape)
                         .background(
-                            color = Color(0xFF1E283C),
+                            color = Color(0xFF12151C).copy(alpha = 0.82f),
                             shape = CircleShape
                         )
                         .clip(CircleShape)

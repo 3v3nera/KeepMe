@@ -39,7 +39,7 @@ fun AuthHost(
                         contentAlignment = androidx.compose.ui.Alignment.Center
                     ) {
                         androidx.compose.material3.CircularProgressIndicator(
-                            color = com.telegramdrive.app.ui.theme.TDriveColors.Primary
+                            color = com.telegramdrive.app.ui.theme.TDriveColors.OnCanvas
                         )
                     }
                 }
@@ -92,22 +92,17 @@ fun AuthHost(
                         androidx.compose.material3.Text(
                             text = state.message,
                             style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
-                            color = com.telegramdrive.app.ui.theme.TDriveColors.OnSurface,
+                            color = com.telegramdrive.app.ui.theme.TDriveColors.OnCanvasMuted,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
                         androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(28.dp))
-                        androidx.compose.material3.Button(
+                        com.telegramdrive.app.ui.components.GlassPrimaryButton(
+                            text = "Try Again",
                             onClick = {
                                 haptics.click()
                                 viewModel.resetAuth()
-                            },
-                            shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
-                            colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                                containerColor = com.telegramdrive.app.ui.theme.TDriveColors.Primary
-                            )
-                        ) {
-                            androidx.compose.material3.Text("Try Again", color = androidx.compose.ui.graphics.Color.White)
-                        }
+                            }
+                        )
                     }
                 }
             }

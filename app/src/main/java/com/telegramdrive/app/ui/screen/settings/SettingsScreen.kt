@@ -12,6 +12,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.alpha
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -169,7 +171,7 @@ fun SettingsScreen(
     }
 
     Scaffold(
-        containerColor = TDriveColors.Background
+        containerColor = Color.Transparent
     ) { padding ->
         Column(
             modifier = Modifier
@@ -177,242 +179,105 @@ fun SettingsScreen(
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
         ) {
-            // ── TOP BAR HEADER: "< Profile" ──
+            // ── Header ──
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 18.dp),
+                    .padding(horizontal = 16.dp, vertical = 24.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Surface(
-                    shape = CircleShape,
-                    color = TDriveColors.SurfaceElevated,
-                    modifier = Modifier.size(42.dp)
-                ) {
-                    IconButton(onClick = {
-                        haptics.click()
-                        onBack()
-                    }) {
-                        Icon(
-                            Icons.AutoMirrored.Rounded.ArrowBack,
-                            contentDescription = "Back",
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.width(14.dp))
+                com.telegramdrive.app.ui.components.ScreenBackButton(onBack = onBack)
+                Spacer(modifier = Modifier.width(16.dp))
                 Text(
-                    text = "Profile",
-                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
-                    color = Color.White
+                    text = "Settings",
+                    style = com.telegramdrive.app.ui.components.screenTitleStyle(),
+                    color = TDriveColors.OnCanvas
                 )
             }
 
-            Spacer(modifier = Modifier.height(4.dp))
-
-            // ── 1. MAIN PROFILE CARD ──
-            Surface(
+            // ── Profile: avatar, name, then three plain stats (no boxes) ──
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp),
-                shape = RoundedCornerShape(26.dp),
-                color = TDriveColors.SurfaceElevated,
-                border = BorderStroke(1.dp, TDriveColors.Outline)
+                    .padding(horizontal = 24.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(
-                    modifier = Modifier.padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                Box(
+                    modifier = Modifier
+                        .size(64.dp)
+                        .clip(CircleShape)
+                        .background(TDriveColors.SurfaceElevated),
+                    contentAlignment = Alignment.Center
                 ) {
-                    // Avatar + Name + Phone + Edit Button
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Avatar: Rounded squircle with Telegram profile photo
-                        Box(
-                            modifier = Modifier
-                                .size(56.dp)
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(
-                                    Brush.linearGradient(
-                                        listOf(Color(0xFF5A8BFF), Color(0xFF85B6FF))
-                                    )
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (!userProfilePhotoPath.isNullOrBlank() && File(userProfilePhotoPath!!).exists()) {
-                                AsyncImage(
-                                    model = File(userProfilePhotoPath!!),
-                                    contentDescription = "Profile Photo",
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                            } else {
-                                Text(
-                                    text = currentUser?.firstName?.take(1) ?: "A",
-                                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                                    color = Color.White
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.width(14.dp))
-
-                        Column(modifier = Modifier.weight(1f)) {
-                            val displayName = remember(currentUser) {
-                                val first = currentUser?.firstName.orEmpty()
-                                val last = currentUser?.lastName.orEmpty()
-                                val full = "$first $last".trim()
-                                if (full.isNotEmpty()) full else "Cloud User"
-                            }
-                            Text(
-                                text = displayName,
-                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                                color = Color.White,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            val phoneOrUser = remember(currentUser) {
-                                val user = currentUser
-                                val phone = user?.phoneNumber
-                                val activeUsername = user?.usernames?.activeUsernames?.firstOrNull()
-                                if (!phone.isNullOrBlank()) {
-                                    "+$phone"
-                                } else if (!activeUsername.isNullOrBlank()) {
-                                    "@$activeUsername"
-                                } else {
-                                    "Telegram Vault"
-                                }
-                            }
-                            Text(
-                                text = phoneOrUser,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = TDriveColors.OnSurfaceDim
-                            )
-                        }
-
-                        IconButton(
-                            onClick = {
-                                haptics.click()
-                                showPrivacyDialog = true
-                            },
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Icon(
-                                Icons.Rounded.Edit,
-                                contentDescription = "Edit Profile",
-                                tint = TDriveColors.OnSurfaceDim,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
-
-                    // Streak Pill
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = Color(0xFF2A201C),
-                        border = BorderStroke(0.5.dp, Color(0xFFFF8A3D).copy(alpha = 0.35f))
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                        ) {
-                            Text(
-                                text = "🔥 12",
-                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                color = Color(0xFFFF9E59)
-                            )
-                            Text(
-                                text = " | Cloud Streak",
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
-                                color = Color(0xFFD4C8C2)
-                            )
-                        }
-                    }
-
-                    // Row of 3 Stat Counters with REAL CLOUD TITLES
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        // Stat 1: Total Files
-                        StatBox(
-                            value = "$totalFilesCount",
-                            label = "Files",
-                            icon = Icons.Rounded.Description,
-                            iconColor = Color(0xFFFF6D3A),
-                            modifier = Modifier.weight(1f)
+                    if (!userProfilePhotoPath.isNullOrBlank() && File(userProfilePhotoPath!!).exists()) {
+                        AsyncImage(
+                            model = File(userProfilePhotoPath!!),
+                            contentDescription = "Profile Photo",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
                         )
-
-                        // Stat 2: Folders
-                        StatBox(
-                            value = "${foldersCount.coerceAtLeast(1)}",
-                            label = "Folders",
-                            icon = Icons.Rounded.Folder,
-                            iconColor = Color(0xFFA855F7),
-                            modifier = Modifier.weight(1f)
-                        )
-
-                        // Stat 3: Cloud Sync Status
-                        StatBox(
-                            value = if (isBackupEnabled) "100%" else "Ready",
-                            label = "Cloud Sync",
-                            icon = Icons.Rounded.CloudDone,
-                            iconColor = Color(0xFF00E5A0),
-                            modifier = Modifier.weight(1f)
+                    } else {
+                        Text(
+                            text = currentUser?.firstName?.take(1)?.uppercase() ?: "K",
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                            color = TDriveColors.OnCanvas
                         )
                     }
+                }
+                Spacer(modifier = Modifier.width(16.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    val displayName = remember(currentUser) {
+                        val full = "${currentUser?.firstName.orEmpty()} ${currentUser?.lastName.orEmpty()}".trim()
+                        if (full.isNotEmpty()) full else "Cloud User"
+                    }
+                    Text(
+                        text = displayName,
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                        color = TDriveColors.OnCanvas,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    val phoneOrUser = remember(currentUser) {
+                        val phone = currentUser?.phoneNumber
+                        val username = currentUser?.usernames?.activeUsernames?.firstOrNull()
+                        when {
+                            !phone.isNullOrBlank() -> "+$phone"
+                            !username.isNullOrBlank() -> "@$username"
+                            else -> "Telegram Vault"
+                        }
+                    }
+                    Text(
+                        text = phoneOrUser,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TDriveColors.OnCanvasMuted
+                    )
                 }
             }
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // ── 2. AUTO-BACKUP & SYNC CARD (KEPT DIRECTLY OUTSIDE ON SCREEN) ──
-            Surface(
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp),
-                shape = RoundedCornerShape(24.dp),
-                color = TDriveColors.SurfaceElevated,
-                border = BorderStroke(1.dp, TDriveColors.Outline)
+                    .padding(horizontal = 24.dp)
             ) {
-                Column(
-                    modifier = Modifier.padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    // Header with master toggle
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = TDriveColors.PrimaryContainer,
-                            modifier = Modifier.size(42.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    Icons.Rounded.CloudUpload,
-                                    contentDescription = null,
-                                    tint = TDriveColors.Primary,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                            }
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                "Auto-Backup & Sync",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                color = Color.White
-                            )
-                            Text(
-                                "Sync photos & videos to 'Camera Backup [TG]'",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = TDriveColors.OnSurfaceDim
-                            )
-                        }
+                ProfileStat("$totalFilesCount", "Files", Modifier.weight(1f))
+                ProfileStat("${foldersCount.coerceAtLeast(1)}", "Folders", Modifier.weight(1f))
+                ProfileStat(if (isBackupEnabled) "On" else "Off", "Backup", Modifier.weight(1f), accent = isBackupEnabled)
+            }
+
+            // ── Backup ──
+            SettingsSectionLabel("Backup")
+            SettingsGroup {
+                SettingsRow(
+                    icon = Icons.Rounded.CloudUpload,
+                    title = "Auto-backup",
+                    subtitle = when {
+                        !isBackupEnabled -> "Off"
+                        lastBackupTime > 0L -> "On · last run ${com.telegramdrive.app.utils.formatRelativeTime(lastBackupTime)}"
+                        else -> "On · waiting for the first run"
+                    },
+                    trailing = {
                         TDriveSwitch(
                             checked = isBackupEnabled,
                             onCheckedChange = { enabled ->
@@ -427,629 +292,281 @@ fun SettingsScreen(
                                     viewModel.toggleBackup(false)
                                 }
                             },
-                            activeColor = TDriveColors.Primary
+                            activeColor = TDriveColors.Accent
                         )
                     }
-
-                    HorizontalDivider(color = TDriveColors.Outline.copy(alpha = 0.5f))
-
-                    // Daily Backup Time Selector
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .clickable {
+                )
+                val dim = if (isBackupEnabled) 1f else 0.45f
+                SettingsRow(
+                    icon = Icons.Rounded.Schedule,
+                    title = "Daily time",
+                    value = formatTime(backupHour, backupMinute),
+                    showChevron = true,
+                    modifier = Modifier.alpha(dim),
+                    onClick = {
+                        haptics.click()
+                        showTimePickerDialog = true
+                    }
+                )
+                SettingsRow(
+                    icon = Icons.Rounded.PhotoLibrary,
+                    title = "Scope",
+                    modifier = Modifier.alpha(dim),
+                    trailing = {
+                        SegmentedPill(
+                            options = listOf("From today", "Everything"),
+                            selectedIndex = if (backupScope == "ALL_TIME") 1 else 0,
+                            onSelect = { index ->
                                 haptics.click()
-                                showTimePickerDialog = true
+                                viewModel.setBackupScope(if (index == 1) "ALL_TIME" else "FROM_TODAY")
                             }
-                            .padding(vertical = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            Icon(
-                                Icons.Rounded.Schedule,
-                                contentDescription = null,
-                                tint = TDriveColors.Primary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Column {
-                                Text(
-                                    "Daily Backup Time",
-                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                                    color = Color.White
-                                )
-                                Text(
-                                    "Runs daily at ${formatTime(backupHour, backupMinute)}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = TDriveColors.Primary.copy(alpha = 0.9f)
-                                )
-                            }
-                        }
-                        Surface(
-                            shape = RoundedCornerShape(10.dp),
-                            color = TDriveColors.PrimaryContainer,
-                            border = BorderStroke(1.dp, TDriveColors.Primary.copy(alpha = 0.5f))
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                            ) {
-                                Text(
-                                    text = formatTime(backupHour, backupMinute),
-                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = TDriveColors.Primary
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Icon(
-                                    Icons.Rounded.Edit,
-                                    contentDescription = null,
-                                    tint = TDriveColors.Primary,
-                                    modifier = Modifier.size(13.dp)
-                                )
-                            }
-                        }
-                    }
-
-                    HorizontalDivider(color = TDriveColors.Outline.copy(alpha = 0.5f))
-
-                    // Backup Scope Section
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(
-                            "Backup Scope",
-                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                            color = Color.White
                         )
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = if (backupScope == "FROM_TODAY") TDriveColors.PrimaryContainer else TDriveColors.Surface,
-                                border = BorderStroke(
-                                    1.dp,
-                                    if (backupScope == "FROM_TODAY") TDriveColors.Primary else TDriveColors.OutlineVariant
-                                ),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clickable {
-                                        haptics.click()
-                                        viewModel.setBackupScope("FROM_TODAY")
-                                    }
-                            ) {
-                                Column(modifier = Modifier.padding(10.dp)) {
-                                    Text(
-                                        "From Today",
-                                        fontWeight = FontWeight.Bold,
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = if (backupScope == "FROM_TODAY") TDriveColors.Primary else Color.White
-                                    )
-                                    Text("New media only", style = MaterialTheme.typography.bodySmall, color = TDriveColors.OnSurfaceDim)
-                                }
-                            }
-
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = if (backupScope == "ALL_TIME") TDriveColors.PrimaryContainer else TDriveColors.Surface,
-                                border = BorderStroke(
-                                    1.dp,
-                                    if (backupScope == "ALL_TIME") TDriveColors.Primary else TDriveColors.OutlineVariant
-                                ),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clickable {
-                                        haptics.click()
-                                        viewModel.setBackupScope("ALL_TIME")
-                                    }
-                            ) {
-                                Column(modifier = Modifier.padding(10.dp)) {
-                                    Text(
-                                        "Day One",
-                                        fontWeight = FontWeight.Bold,
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = if (backupScope == "ALL_TIME") TDriveColors.Primary else Color.White
-                                    )
-                                    Text("Entire camera roll", style = MaterialTheme.typography.bodySmall, color = TDriveColors.OnSurfaceDim)
-                                }
-                            }
-                        }
                     }
-
-                    HorizontalDivider(color = TDriveColors.Outline.copy(alpha = 0.5f))
-
-                    // Upload on Mobile Data
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Upload on Mobile Data", style = MaterialTheme.typography.bodyMedium, color = Color.White)
+                )
+                SettingsRow(
+                    icon = Icons.Rounded.SignalCellularAlt,
+                    title = "Use mobile data",
+                    subtitle = "Otherwise Wi-Fi only",
+                    modifier = Modifier.alpha(dim),
+                    trailing = {
                         TDriveSwitch(
                             checked = !isWifiOnly,
                             onCheckedChange = { viewModel.toggleMobileData(it) },
-                            activeColor = TDriveColors.Primary
+                            activeColor = TDriveColors.Accent
                         )
                     }
-
-                    // While Charging Only
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("While Charging Only", style = MaterialTheme.typography.bodyMedium, color = Color.White)
+                )
+                SettingsRow(
+                    icon = Icons.Rounded.BatteryChargingFull,
+                    title = "Only while charging",
+                    modifier = Modifier.alpha(dim),
+                    trailing = {
                         TDriveSwitch(
                             checked = isChargingOnly,
                             onCheckedChange = { viewModel.toggleChargingOnly(it) },
-                            activeColor = TDriveColors.Primary
+                            activeColor = TDriveColors.Accent
                         )
                     }
-
-                    // Background Reliability Status
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = if (batteryExemptState) TDriveColors.Secondary.copy(alpha = 0.12f) else Color(0xFFFFB74D).copy(alpha = 0.12f),
-                        border = BorderStroke(
-                            1.dp,
-                            if (batteryExemptState) TDriveColors.Secondary.copy(alpha = 0.3f) else Color(0xFFFFB74D).copy(alpha = 0.3f)
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Icon(
-                                    if (batteryExemptState) Icons.Rounded.CheckCircle else Icons.Rounded.BatteryAlert,
-                                    contentDescription = null,
-                                    tint = if (batteryExemptState) TDriveColors.Secondary else Color(0xFFFFB74D),
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Text(
-                                    text = if (batteryExemptState) "Unrestricted Background Active" else "Battery Optimized (May sleep)",
-                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                    color = if (batteryExemptState) TDriveColors.Secondary else Color(0xFFFFB74D)
-                                )
-                            }
-                            if (!batteryExemptState) {
-                                TextButton(onClick = { requestBatteryOptimizationExemption() }) {
-                                    Text("Allow", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = Color(0xFFFFB74D))
-                                }
-                            }
-                        }
-                    }
-
-                    // Action Button: Back Up Camera Photos Now
-                    Button(
-                        onClick = {
-                            haptics.click()
-                            viewModel.triggerBackupNow()
-                        },
-                        enabled = !isBackingUpNow,
-                        shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = TDriveColors.Primary),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        if (isBackingUpNow) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(16.dp),
-                                strokeWidth = 2.dp,
-                                color = Color.White
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Backing up camera photos...", fontWeight = FontWeight.SemiBold)
-                        } else {
-                            Icon(Icons.Rounded.CloudUpload, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Back Up Camera Photos Now", fontWeight = FontWeight.SemiBold)
-                        }
-                    }
-                }
+                )
+                SettingsRow(
+                    icon = if (batteryExemptState) Icons.Rounded.CheckCircle else Icons.Rounded.BatteryAlert,
+                    title = "Background access",
+                    value = if (batteryExemptState) "Unrestricted" else "Limited",
+                    valueColor = if (batteryExemptState) TDriveColors.Accent else Color(0xFFFFB74D),
+                    showChevron = !batteryExemptState,
+                    showDivider = false,
+                    onClick = if (batteryExemptState) null else ({
+                        haptics.click()
+                        requestBatteryOptimizationExemption()
+                    })
+                )
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // ── 3. STANDALONE "APPEARANCE" CARD ──
-            Surface(
+            Spacer(modifier = Modifier.height(14.dp))
+            com.telegramdrive.app.ui.components.GlassPrimaryButton(
+                text = if (isBackingUpNow) "Backing up…" else "Back up now",
+                loading = isBackingUpNow,
+                onClick = {
+                    haptics.click()
+                    viewModel.triggerBackupNow()
+                },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp)
-                    .clip(RoundedCornerShape(18.dp))
-                    .clickable { haptics.click() },
-                shape = RoundedCornerShape(18.dp),
-                color = TDriveColors.SurfaceElevated,
-                border = BorderStroke(1.dp, TDriveColors.Outline)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 18.dp, vertical = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        Icons.Rounded.LightMode,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(14.dp))
-                    Text(
-                        text = "Appearance",
-                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
-                        color = Color.White,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Icon(
-                        Icons.Rounded.ChevronRight,
-                        contentDescription = null,
-                        tint = TDriveColors.OnSurfaceDim,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            }
+                    .padding(horizontal = 24.dp)
+            )
 
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // ── 4. "YOUR INFORMATION" / PREFERENCES SECTION WITH REAL TITLES ──
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = "Your Information",
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
-                    color = TDriveColors.OnSurfaceDim,
-                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 6.dp)
-                )
-
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp),
-                    shape = RoundedCornerShape(22.dp),
-                    color = TDriveColors.SurfaceElevated,
-                    border = BorderStroke(1.dp, TDriveColors.Outline)
-                ) {
-                    Column {
-                        // Custom Folder Backup
-                        SettingsNavRow(
-                            icon = Icons.Rounded.FolderSpecial,
-                            iconBg = Color(0xFFFF3366),
-                            title = "Custom Folder Backup",
-                            subtitle = customFolderName ?: "Choose custom device directory",
-                            onClick = {
-                                haptics.click()
-                                showCustomFolderSheet = true
-                            }
-                        )
-
-                        HorizontalDivider(
-                            modifier = Modifier.padding(start = 58.dp),
-                            color = TDriveColors.Outline.copy(alpha = 0.5f)
-                        )
-
-                        // Your Space & Cache
-                        SettingsNavRow(
-                            icon = Icons.Rounded.PieChart,
-                            iconBg = Color(0xFF00C48C),
-                            title = "Your Space & Cache",
-                            subtitle = "Storage visualizer and disk cleaner",
-                            onClick = {
-                                haptics.click()
-                                showStorageSheet = true
-                            }
-                        )
-
-                        HorizontalDivider(
-                            modifier = Modifier.padding(start = 58.dp),
-                            color = TDriveColors.Outline.copy(alpha = 0.5f)
-                        )
-
-                        // App Updates & Releases
-                        SettingsNavRow(
-                            icon = Icons.Rounded.SystemUpdate,
-                            iconBg = Color(0xFFFF9500),
-                            title = "App Updates & Releases",
-                            subtitle = "v${BuildConfig.VERSION_NAME} • @$updateChannelUsername",
-                            onClick = {
-                                haptics.click()
-                                showUpdatesSheet = true
-                            }
-                        )
+            // ── Library ──
+            SettingsSectionLabel("Library")
+            SettingsGroup {
+                SettingsRow(
+                    icon = Icons.Rounded.FolderSpecial,
+                    title = "Custom folder backup",
+                    value = customFolderName ?: "Not set",
+                    showChevron = true,
+                    onClick = {
+                        haptics.click()
+                        showCustomFolderSheet = true
                     }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // ── 5. "OTHER INFORMATION" SECTION ──
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = "Other Information",
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
-                    color = TDriveColors.OnSurfaceDim,
-                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 6.dp)
                 )
-
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp),
-                    shape = RoundedCornerShape(22.dp),
-                    color = TDriveColors.SurfaceElevated,
-                    border = BorderStroke(1.dp, TDriveColors.Outline)
-                ) {
-                    Column {
-                        SettingsNavRow(
-                            icon = Icons.Rounded.Lock,
-                            iconBg = Color(0xFF3F4450),
-                            title = "Account Privacy & Security",
-                            subtitle = "Telegram MTProto and session credentials",
-                            onClick = {
-                                haptics.click()
-                                showPrivacyDialog = true
-                            }
-                        )
-
-                        HorizontalDivider(
-                            modifier = Modifier.padding(start = 58.dp),
-                            color = TDriveColors.Outline.copy(alpha = 0.5f)
-                        )
-
-                        SettingsNavRow(
-                            icon = Icons.AutoMirrored.Rounded.Logout,
-                            iconBg = Color(0xFF9333EA),
-                            title = "Log Out",
-                            subtitle = "Disconnect Telegram Cloud session",
-                            onClick = {
-                                haptics.click()
-                                showLogoutConfirmDialog = true
-                            }
-                        )
+                SettingsRow(
+                    icon = Icons.Rounded.PieChart,
+                    title = "Storage & cache",
+                    value = com.telegramdrive.app.ui.components.formatFileSize(storageStats.sumOf { it.totalSize }),
+                    showChevron = true,
+                    onClick = {
+                        haptics.click()
+                        showStorageSheet = true
                     }
-                }
+                )
+                SettingsRow(
+                    icon = Icons.Rounded.SystemUpdate,
+                    title = "App updates",
+                    value = if (availableUpdate != null) "Update available" else "v${BuildConfig.VERSION_NAME}",
+                    valueColor = if (availableUpdate != null) TDriveColors.Accent else TDriveColors.OnCanvasMuted,
+                    showChevron = true,
+                    showDivider = false,
+                    onClick = {
+                        haptics.click()
+                        showUpdatesSheet = true
+                    }
+                )
             }
 
-            Spacer(modifier = Modifier.height(36.dp))
+            // ── Account ──
+            SettingsSectionLabel("Account")
+            SettingsGroup {
+                SettingsRow(
+                    icon = Icons.Rounded.Lock,
+                    title = "Privacy & security",
+                    showChevron = true,
+                    onClick = {
+                        haptics.click()
+                        showPrivacyDialog = true
+                    }
+                )
+                SettingsRow(
+                    icon = Icons.AutoMirrored.Rounded.Logout,
+                    title = "Log out",
+                    destructive = true,
+                    showDivider = false,
+                    onClick = {
+                        haptics.click()
+                        showLogoutConfirmDialog = true
+                    }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(NavBarBottomInset))
         }
     }
 
     // ── SHEET: CUSTOM FOLDER BACKUP ──
     if (showCustomFolderSheet) {
-        ModalBottomSheet(
-            onDismissRequest = { showCustomFolderSheet = false },
-            containerColor = TDriveColors.Background,
-            dragHandle = { BottomSheetDefaults.DragHandle(color = TDriveColors.Outline) }
+        com.telegramdrive.app.ui.components.GlassSheetDialog(
+            title = "Custom Folder Backup",
+            subtitle = "Choose any directory on your phone to back up to Telegram.",
+            onDismiss = { showCustomFolderSheet = false }
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+            com.telegramdrive.app.ui.components.GlassInfoBlock {
+                Text("Selected directory", style = MaterialTheme.typography.labelMedium, color = com.telegramdrive.app.ui.components.GlassPanelTokens.TextSecondary)
+                Text(
+                    text = customFolderName ?: "No folder selected yet",
+                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                    color = if (customFolderName != null) TDriveColors.Secondary else Color(0xFFFFB74D)
+                )
+            }
+            com.telegramdrive.app.ui.components.GlassActionRow(
+                icon = Icons.Rounded.FolderOpen,
+                title = if (customFolderName == null) "Choose Folder" else "Change Folder",
+                onClick = { openFolderLauncher.launch(null) }
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Custom Folder Backup", style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold), color = Color.White)
-                Text("Choose any directory on your phone to back up to Telegram.", style = MaterialTheme.typography.bodySmall, color = TDriveColors.OnSurfaceDim)
-
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = TDriveColors.SurfaceElevated,
-                    border = BorderStroke(1.dp, TDriveColors.OutlineVariant),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text("Selected Directory:", style = MaterialTheme.typography.labelMedium, color = TDriveColors.OnSurfaceDim)
-                        Text(
-                            text = customFolderName ?: "No folder selected yet",
-                            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
-                            color = if (customFolderName != null) TDriveColors.Secondary else Color(0xFFFFB74D)
-                        )
-                        Button(
-                            onClick = { openFolderLauncher.launch(null) },
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = TDriveColors.SecondaryContainer, contentColor = TDriveColors.Secondary),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(Icons.Rounded.FolderOpen, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(if (customFolderName == null) "Choose Folder" else "Change Folder")
+                Text("Enable backup for folder", style = MaterialTheme.typography.bodyLarge, color = com.telegramdrive.app.ui.components.GlassPanelTokens.TextPrimary)
+                TDriveSwitch(
+                    checked = isCustomFolderEnabled,
+                    onCheckedChange = { enabled ->
+                        if (enabled && customFolderName.isNullOrBlank()) {
+                            openFolderLauncher.launch(null)
+                        } else {
+                            viewModel.toggleCustomFolderBackup(enabled)
                         }
-                    }
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Enable Backup For Folder", style = MaterialTheme.typography.bodyLarge, color = Color.White)
-                    TDriveSwitch(
-                        checked = isCustomFolderEnabled,
-                        onCheckedChange = { enabled ->
-                            if (enabled && customFolderName.isNullOrBlank()) {
-                                openFolderLauncher.launch(null)
-                            } else {
-                                viewModel.toggleCustomFolderBackup(enabled)
-                            }
-                        },
-                        activeColor = TDriveColors.Secondary
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(24.dp))
+                    },
+                    activeColor = TDriveColors.Secondary
+                )
             }
         }
     }
 
     // ── SHEET: STORAGE & CACHE ──
     if (showStorageSheet) {
-        ModalBottomSheet(
-            onDismissRequest = { showStorageSheet = false },
-            containerColor = TDriveColors.Background,
-            dragHandle = { BottomSheetDefaults.DragHandle(color = TDriveColors.Outline) }
+        com.telegramdrive.app.ui.components.GlassSheetDialog(
+            title = "Your Space & Cache",
+            onDismiss = { showStorageSheet = false }
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                Text("Your Space & Cache", style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold), color = Color.White)
-
-                // Storage visualizer with SOLID PHYSICS (zero overlap)
-                StorageDashboard(stats = storageStats)
-
-                Button(
-                    onClick = {
-                        haptics.click()
-                        val cacheDir = context.cacheDir
-                        cacheDir.deleteRecursively()
-                        showStorageSheet = false
-                    },
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = TDriveColors.SurfaceElevated, contentColor = Color.White),
-                    border = BorderStroke(1.dp, TDriveColors.OutlineVariant),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(Icons.Rounded.CleaningServices, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color(0xFFFF6D3A))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Clear Local Cache")
+            StorageDashboard(stats = storageStats)
+            com.telegramdrive.app.ui.components.GlassActionRow(
+                icon = Icons.Rounded.CleaningServices,
+                title = "Clear Local Cache",
+                tint = Color(0xFFFF8A65),
+                onClick = {
+                    haptics.click()
+                    context.cacheDir.deleteRecursively()
+                    showStorageSheet = false
                 }
-
-                Spacer(modifier = Modifier.height(20.dp))
-            }
+            )
         }
     }
 
     // ── SHEET: APP UPDATES ──
     if (showUpdatesSheet) {
-        ModalBottomSheet(
-            onDismissRequest = { showUpdatesSheet = false },
-            containerColor = TDriveColors.Background,
-            dragHandle = { BottomSheetDefaults.DragHandle(color = TDriveColors.Outline) }
+        com.telegramdrive.app.ui.components.GlassSheetDialog(
+            title = "App Updates & Releases",
+            onDismiss = { showUpdatesSheet = false }
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                Text("App Updates & Releases", style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold), color = Color.White)
+            com.telegramdrive.app.ui.components.GlassInfoBlock {
+                Text("Installed version", style = MaterialTheme.typography.bodySmall, color = com.telegramdrive.app.ui.components.GlassPanelTokens.TextSecondary)
+                Text(
+                    "v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE})",
+                    fontWeight = FontWeight.Medium,
+                    color = com.telegramdrive.app.ui.components.GlassPanelTokens.TextPrimary
+                )
+            }
 
-                Surface(
-                    shape = RoundedCornerShape(14.dp),
-                    color = TDriveColors.SurfaceElevated,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text("Installed Version", style = MaterialTheme.typography.bodySmall, color = TDriveColors.OnSurfaceDim)
-                            Text("v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE})", fontWeight = FontWeight.Bold, color = Color.White)
-                        }
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = TDriveColors.Primary.copy(alpha = 0.15f)
-                        ) {
-                            Text("Latest", color = TDriveColors.Primary, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), style = MaterialTheme.typography.labelSmall)
-                        }
+            if (availableUpdate != null) {
+                UpdateAvailableBanner(
+                    updateInfo = availableUpdate!!,
+                    onUpdateClick = {
+                        haptics.click()
+                        showDownloadDialog = true
+                        viewModel.startUpdateDownload(availableUpdate!!)
+                    },
+                    onDismissClick = {
+                        haptics.click()
+                        viewModel.dismissUpdate(availableUpdate!!.versionCode)
                     }
-                }
+                )
+            }
 
-                if (availableUpdate != null) {
-                    UpdateAvailableBanner(
-                        updateInfo = availableUpdate!!,
-                        onUpdateClick = {
-                            haptics.click()
-                            showDownloadDialog = true
-                            viewModel.startUpdateDownload(availableUpdate!!)
-                        },
-                        onDismissClick = {
-                            haptics.click()
-                            viewModel.dismissUpdate(availableUpdate!!.versionCode)
-                        }
-                    )
-                }
-
-                Button(
-                    onClick = {
+            com.telegramdrive.app.ui.components.GlassActionRow(
+                icon = Icons.Rounded.Refresh,
+                title = if (isCheckingUpdate) "Checking @$updateChannelUsername..." else "Check for Updates",
+                onClick = {
+                    if (!isCheckingUpdate) {
                         haptics.click()
                         viewModel.checkForUpdates()
-                    },
-                    shape = RoundedCornerShape(14.dp),
-                    enabled = !isCheckingUpdate,
-                    colors = ButtonDefaults.buttonColors(containerColor = TDriveColors.Primary),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    if (isCheckingUpdate) {
-                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = Color.White)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Checking @$updateChannelUsername...")
-                    } else {
-                        Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Check for Updates", fontWeight = FontWeight.SemiBold)
                     }
                 }
-
-                Spacer(modifier = Modifier.height(20.dp))
-            }
+            )
         }
     }
 
     // ── PRIVACY DIALOG ──
     if (showPrivacyDialog) {
-        AlertDialog(
-            onDismissRequest = { showPrivacyDialog = false },
-            confirmButton = {
-                TextButton(onClick = { showPrivacyDialog = false }) {
-                    Text("Close", color = TDriveColors.Primary)
-                }
-            },
-            title = { Text("Account Privacy & Security", fontWeight = FontWeight.Bold) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Your files are transmitted directly between your phone and the official Telegram MTProto infrastructure.", style = MaterialTheme.typography.bodyMedium, color = TDriveColors.OnSurfaceDim)
-                    Text("End-to-end sessions are handled locally on device. No middleman servers ever view or store your files.", style = MaterialTheme.typography.bodyMedium, color = TDriveColors.OnSurfaceDim)
-                }
-            },
-            containerColor = TDriveColors.SurfaceElevated
+        com.telegramdrive.app.ui.components.GlassAlertDialog(
+            title = "Account Privacy & Security",
+            message = "Your files are transmitted directly between your phone and the official Telegram MTProto infrastructure.\n\nEnd-to-end sessions are handled locally on device. No middleman servers ever view or store your files.",
+            dismissText = "Close",
+            onDismiss = { showPrivacyDialog = false }
         )
     }
 
     // ── LOGOUT CONFIRMATION DIALOG ──
     if (showLogoutConfirmDialog) {
-        AlertDialog(
-            onDismissRequest = { showLogoutConfirmDialog = false },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        haptics.click()
-                        showLogoutConfirmDialog = false
-                        viewModel.logout()
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935))
-                ) {
-                    Text("Log Out", color = Color.White, fontWeight = FontWeight.Bold)
-                }
+        com.telegramdrive.app.ui.components.GlassAlertDialog(
+            title = "Log out of Telegram?",
+            message = "This will clear your credentials and end your active cloud session.",
+            confirmText = "Log Out",
+            destructive = true,
+            onConfirm = {
+                haptics.click()
+                showLogoutConfirmDialog = false
+                viewModel.logout()
             },
-            dismissButton = {
-                TextButton(onClick = { showLogoutConfirmDialog = false }) {
-                    Text("Cancel", color = TDriveColors.OnSurfaceDim)
-                }
-            },
-            title = { Text("Log out of Telegram?", fontWeight = FontWeight.Bold) },
-            text = { Text("This will clear your credentials and end your active cloud session.", color = TDriveColors.OnSurfaceDim) },
-            containerColor = TDriveColors.SurfaceElevated
+            onDismiss = { showLogoutConfirmDialog = false }
         )
     }
 
@@ -1060,55 +577,40 @@ fun SettingsScreen(
             initialMinute = backupMinute,
             is24Hour = false
         )
-        Dialog(onDismissRequest = { showTimePickerDialog = false }) {
-            Surface(
-                shape = RoundedCornerShape(28.dp),
-                color = TDriveColors.SurfaceElevated,
-                border = BorderStroke(1.dp, TDriveColors.Outline)
-            ) {
-                Column(
-                    modifier = Modifier.padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(20.dp)
-                ) {
-                    Text("Set Daily Backup Time", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold), color = Color.White)
-                    TimePicker(
-                        state = timePickerState,
-                        colors = TimePickerDefaults.colors(
-                            clockDialColor = TDriveColors.Surface,
-                            selectorColor = TDriveColors.Primary,
-                            containerColor = TDriveColors.Surface,
-                            periodSelectorBorderColor = TDriveColors.Outline,
-                            periodSelectorSelectedContainerColor = TDriveColors.PrimaryContainer,
-                            periodSelectorSelectedContentColor = TDriveColors.Primary,
-                            periodSelectorUnselectedContentColor = TDriveColors.OnSurface,
-                            timeSelectorSelectedContainerColor = TDriveColors.PrimaryContainer,
-                            timeSelectorSelectedContentColor = TDriveColors.Primary,
-                            timeSelectorUnselectedContainerColor = TDriveColors.Surface,
-                            timeSelectorUnselectedContentColor = Color.White
-                        )
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        TextButton(onClick = { showTimePickerDialog = false }) {
-                            Text("Cancel", color = TDriveColors.OnSurfaceDim)
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Button(
-                            onClick = {
-                                viewModel.setBackupTime(timePickerState.hour, timePickerState.minute)
-                                showTimePickerDialog = false
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = TDriveColors.Primary),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text("Save Time", fontWeight = FontWeight.SemiBold)
-                        }
+        com.telegramdrive.app.ui.components.GlassSheetDialog(
+            title = "Set Daily Backup Time",
+            doneText = "Cancel",
+            onDismiss = { showTimePickerDialog = false },
+            actions = {
+                com.telegramdrive.app.ui.components.GlassPrimaryButton(
+                    text = "Save Time",
+                    onClick = {
+                        viewModel.setBackupTime(timePickerState.hour, timePickerState.minute)
+                        showTimePickerDialog = false
                     }
-                }
+                )
+            }
+        ) {
+            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                TimePicker(
+                    state = timePickerState,
+                    colors = TimePickerDefaults.colors(
+                        clockDialColor = com.telegramdrive.app.ui.components.GlassPanelTokens.PillFill,
+                        selectorColor = Color.White,
+                        containerColor = Color.Transparent,
+                        periodSelectorBorderColor = Color.White.copy(alpha = 0.2f),
+                        clockDialSelectedContentColor = Color(0xFF0B0F1A),
+                        clockDialUnselectedContentColor = Color.White,
+                        periodSelectorSelectedContainerColor = Color.White,
+                        periodSelectorUnselectedContainerColor = Color.Transparent,
+                        periodSelectorSelectedContentColor = Color(0xFF0B0F1A),
+                        periodSelectorUnselectedContentColor = Color.White,
+                        timeSelectorSelectedContainerColor = Color.White,
+                        timeSelectorUnselectedContainerColor = com.telegramdrive.app.ui.components.GlassPanelTokens.PillFill,
+                        timeSelectorSelectedContentColor = Color(0xFF0B0F1A),
+                        timeSelectorUnselectedContentColor = Color.White
+                    )
+                )
             }
         }
     }
@@ -1130,6 +632,9 @@ fun SettingsScreen(
             onDismissClick = {
                 showDownloadDialog = false
                 viewModel.resetDownloadState()
+            },
+            onRetryClick = {
+                viewModel.startUpdateDownload(availableUpdate!!)
             }
         )
     }
@@ -1146,7 +651,7 @@ private fun StatBox(
 ) {
     Surface(
         shape = RoundedCornerShape(16.dp),
-        color = Color(0xFF191F2D),
+        color = TDriveColors.SurfaceElevated,
         border = BorderStroke(1.dp, Color.White.copy(alpha = 0.07f)),
         modifier = modifier
     ) {
@@ -1248,4 +753,151 @@ private fun formatTime(hour: Int, minute: Int): String {
         else -> hour % 12
     }
     return String.format(Locale.getDefault(), "%02d:%02d %s", displayHour, minute, ampm)
+}
+
+private val NavBarBottomInset = 36.dp
+
+@Composable
+private fun SettingsSectionLabel(text: String) {
+    Text(
+        text = text.uppercase(),
+        style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 1.2.sp),
+        color = TDriveColors.OnCanvasMuted,
+        modifier = Modifier.padding(start = 28.dp, end = 24.dp, top = 28.dp, bottom = 10.dp)
+    )
+}
+
+/** Rounded card whose rows are separated by hairlines. */
+@Composable
+private fun SettingsGroup(content: @Composable ColumnScope.() -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp)
+            .clip(RoundedCornerShape(24.dp))
+            .background(TDriveColors.Surface)
+            .border(1.dp, TDriveColors.LineSoft, RoundedCornerShape(24.dp)),
+        content = content
+    )
+}
+
+/** One settings line: icon, title (+ subtitle), then a value, a control, or a chevron. */
+@Composable
+private fun SettingsRow(
+    icon: ImageVector,
+    title: String,
+    modifier: Modifier = Modifier,
+    subtitle: String? = null,
+    value: String? = null,
+    valueColor: Color = TDriveColors.OnCanvasMuted,
+    showChevron: Boolean = false,
+    showDivider: Boolean = true,
+    destructive: Boolean = false,
+    trailing: (@Composable () -> Unit)? = null,
+    onClick: (() -> Unit)? = null
+) {
+    val tint = if (destructive) TDriveColors.Error else TDriveColors.OnCanvas
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+                .padding(horizontal = 18.dp, vertical = 15.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = if (destructive) TDriveColors.Error else TDriveColors.OnCanvasMuted,
+                modifier = Modifier.size(22.dp)
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = tint
+                )
+                if (subtitle != null) {
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TDriveColors.OnCanvasMuted
+                    )
+                }
+            }
+            if (value != null) {
+                Text(
+                    text = value,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = valueColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.widthIn(max = 150.dp)
+                )
+            }
+            trailing?.invoke()
+            if (showChevron) {
+                Icon(
+                    imageVector = Icons.Rounded.ChevronRight,
+                    contentDescription = null,
+                    tint = TDriveColors.OnCanvasFaint,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+        if (showDivider) {
+            Box(
+                Modifier
+                    .padding(start = 54.dp)
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(TDriveColors.LineSoft)
+            )
+        }
+    }
+}
+
+@Composable
+private fun ProfileStat(value: String, label: String, modifier: Modifier = Modifier, accent: Boolean = false) {
+    Column(modifier = modifier) {
+        Text(
+            text = value,
+            style = MaterialTheme.typography.headlineSmall.copy(
+                fontWeight = FontWeight.Bold,
+                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+            ),
+            color = if (accent) TDriveColors.Accent else TDriveColors.OnCanvas
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = TDriveColors.OnCanvasMuted
+        )
+    }
+}
+
+/** Compact two-option switch used for "From today / Everything". */
+@Composable
+private fun SegmentedPill(options: List<String>, selectedIndex: Int, onSelect: (Int) -> Unit) {
+    Row(
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(TDriveColors.FillSoft)
+            .padding(3.dp)
+    ) {
+        options.forEachIndexed { index, label ->
+            val selected = index == selectedIndex
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = if (selected) Color(0xFF0B0C0F) else TDriveColors.OnCanvasMuted,
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(if (selected) TDriveColors.OnCanvas else Color.Transparent)
+                    .clickable { onSelect(index) }
+                    .padding(horizontal = 12.dp, vertical = 7.dp)
+            )
+        }
+    }
 }

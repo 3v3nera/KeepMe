@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -86,20 +87,60 @@ class HomeViewModel @Inject constructor(
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
-    fun refresh() {
+    /** [userInitiated] = pull-to-refresh; automatic refreshes respect the sync cool-down. */
+    fun refresh(userInitiated: Boolean = true) {
         if (_isRefreshing.value) return
         viewModelScope.launch {
             _isRefreshing.value = true
             try {
                 folderRepository.syncFolders()
-                fileRepository.syncAllFolders()
-                appUpdateManager.checkForUpdates(force = true)
+                fileRepository.syncAllFolders(force = userInitiated)
+                if (userInitiated) appUpdateManager.checkForUpdates(force = true)
             } finally {
                 _isRefreshing.value = false
             }
         }
     }
 
+    /** One cover card per month, newest first, used by Home's photo month cards. */
+    val monthCovers: StateFlow<List<MonthCover>> = fileRepository.getRecentFiles(1000)
+        .map { list ->
+            val currentYear = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
+            list.map { it.toTelegramFile() }
+                .filter { it.effectiveDate > 0 }
+                .groupBy { file ->
+                    val cal = java.util.Calendar.getInstance().apply { timeInMillis = file.effectiveDate }
+                    cal.get(java.util.Calendar.YEAR) * 12 + cal.get(java.util.Calendar.MONTH)
+                }
+                .toSortedMap(compareByDescending { it })
+                .map { (key, files) ->
+                    val year = key / 12
+                    val month = key % 12
+                    val pattern = if (year == currentYear) "MMMM" else "MMMM yyyy"
+                    val name = java.text.SimpleDateFormat(pattern, java.util.Locale.getDefault())
+                        .format(java.util.Date(files.first().effectiveDate))
+                        .replaceFirstChar { c -> if (c.isLowerCase()) c.titlecase(java.util.Locale.getDefault()) else c.toString() }
+                    val cover = files.firstOrNull { it.fileType == FileType.IMAGE && it.thumbnailPath != null }
+                        ?: files.firstOrNull { it.thumbnailPath != null }
+                    MonthCover(
+                        filter = com.telegramdrive.app.domain.model.DateFilter.Month(year, month, name),
+                        count = files.size,
+                        coverPath = cover?.thumbnailPath,
+                        coverThumbnailFileId = files.firstOrNull { it.thumbnailPath == null }?.thumbnailFileId
+                    )
+                }
+        }
+        .flowOn(kotlinx.coroutines.Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** Runs the camera backup right now (Home quick action). */
+    fun backupNow() {
+        CameraBackupWorker.runOnce(
+            context = context,
+            wifiOnly = settingsDataStore.isBackupWifiOnly(),
+            chargingOnly = settingsDataStore.isBackupChargingOnly()
+        )
+    }
     val recentFiles: StateFlow<List<TelegramFile>> = fileRepository.getRecentFiles(20)
         .map { list -> list.map { it.toTelegramFile() } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -142,4 +183,17 @@ class HomeViewModel @Inject constructor(
             CameraBackupWorker.cancel(context)
         }
     }
+}
+
+data class MonthCover(
+    val filter: com.telegramdrive.app.domain.model.DateFilter.Month,
+    val count: Int,
+    val coverPath: String?,
+    /** TDLib thumbnail id to download when no cover has been fetched yet */
+    val coverThumbnailFileId: Int?
+)
+
+/** Hand-off so tapping a Home month card opens Recent Uploads already filtered to that month. */
+object HomeMonthLink {
+    @Volatile var pending: com.telegramdrive.app.domain.model.DateFilter.Month? = null
 }

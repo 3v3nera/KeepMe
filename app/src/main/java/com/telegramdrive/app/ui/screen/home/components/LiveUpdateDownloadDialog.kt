@@ -47,7 +47,18 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.telegramdrive.app.domain.update.AppUpdateInfo
 import com.telegramdrive.app.domain.update.UpdateDownloadState
+import androidx.compose.ui.unit.sp
 import com.telegramdrive.app.ui.theme.TDriveColors
+import androidx.compose.foundation.background as glassBackground
+import androidx.compose.foundation.shape.RoundedCornerShape as GlassRoundedShape
+import com.telegramdrive.app.ui.components.GlassChip
+import com.telegramdrive.app.ui.components.GlassChipText
+import com.telegramdrive.app.ui.components.GlassDialogHost
+import com.telegramdrive.app.ui.components.GlassHeroSlot
+import com.telegramdrive.app.ui.components.GlassPanel
+import com.telegramdrive.app.ui.components.GlassPanelTokens
+import com.telegramdrive.app.ui.components.GlassPrimaryButton
+import com.telegramdrive.app.ui.components.GlassSecondaryButton
 import java.text.DecimalFormat
 
 @Composable
@@ -56,266 +67,198 @@ fun LiveUpdateDownloadDialog(
     downloadState: UpdateDownloadState,
     onCancelClick: () -> Unit,
     onInstallClick: () -> Unit,
-    onDismissClick: () -> Unit
+    onDismissClick: () -> Unit,
+    onRetryClick: () -> Unit = onCancelClick
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    // Keep screen awake while actively downloading update so the download isn't suspended by screen lock
+    androidx.compose.runtime.DisposableEffect(downloadState is UpdateDownloadState.Downloading) {
+        val window = (context as? android.app.Activity)?.window
+        if (downloadState is UpdateDownloadState.Downloading) {
+            window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+        onDispose {
+            window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+
+    val isDownloading = downloadState is UpdateDownloadState.Downloading
+    val dismiss: () -> Unit = { if (!isDownloading) onDismissClick() }
+
     Dialog(
-        onDismissRequest = {
-            if (downloadState !is UpdateDownloadState.Downloading) {
-                onDismissClick()
-            }
-        },
+        onDismissRequest = dismiss,
         properties = DialogProperties(
-            dismissOnBackPress = downloadState !is UpdateDownloadState.Downloading,
-            dismissOnClickOutside = false
+            dismissOnBackPress = false,
+            dismissOnClickOutside = false,
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false
         )
     ) {
-        Surface(
-            shape = RoundedCornerShape(28.dp),
-            color = TDriveColors.SurfaceElevated,
-            border = androidx.compose.foundation.BorderStroke(1.dp, TDriveColors.Outline),
-            shadowElevation = 16.dp,
-            modifier = Modifier.fillMaxWidth()
-        ) {
+        GlassDialogHost(onDismiss = dismiss, scrimStrength = 0.74f) {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                modifier = Modifier.fillMaxWidth(0.88f),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Header Row
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                GlassPanel(backdrop = null, modifier = Modifier.fillMaxWidth()) {
+                    GlassHeroSlot(
+                        height = 112.dp,
+                        tint = when (downloadState) {
+                            is UpdateDownloadState.ReadyToInstall -> TDriveColors.Secondary
+                            is UpdateDownloadState.Error -> Color(0xFFFF453A)
+                            else -> TDriveColors.Primary
+                        },
+                        chips = { GlassChip { GlassChipText("Version ${updateInfo.versionName}") } }
                     ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = when (downloadState) {
-                                is UpdateDownloadState.ReadyToInstall -> TDriveColors.SecondaryContainer
-                                is UpdateDownloadState.Error -> TDriveColors.ErrorContainer
-                                else -> TDriveColors.PrimaryContainer
+                        Icon(
+                            imageVector = when (downloadState) {
+                                is UpdateDownloadState.ReadyToInstall -> Icons.Rounded.CheckCircle
+                                is UpdateDownloadState.Error -> Icons.Rounded.ErrorOutline
+                                else -> Icons.Rounded.SystemUpdate
                             },
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = when (downloadState) {
-                                        is UpdateDownloadState.ReadyToInstall -> Icons.Rounded.CheckCircle
-                                        is UpdateDownloadState.Error -> Icons.Rounded.ErrorOutline
-                                        else -> Icons.Rounded.SystemUpdate
-                                    },
-                                    contentDescription = null,
-                                    tint = when (downloadState) {
-                                        is UpdateDownloadState.ReadyToInstall -> TDriveColors.Secondary
-                                        is UpdateDownloadState.Error -> TDriveColors.Error
-                                        else -> TDriveColors.Primary
-                                    },
-                                    modifier = Modifier.size(22.dp)
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(44.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    Text(
+                        text = when (downloadState) {
+                            is UpdateDownloadState.ReadyToInstall -> "Download Complete"
+                            is UpdateDownloadState.Error -> "Update Failed"
+                            else -> "Updating KeepMe"
+                        },
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 22.sp,
+                            letterSpacing = (-0.3).sp
+                        ),
+                        color = GlassPanelTokens.TextPrimary
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    when (downloadState) {
+                        is UpdateDownloadState.Downloading -> {
+                            val animatedProgress by animateFloatAsState(
+                                targetValue = downloadState.progress,
+                                label = "update_download_progress"
+                            )
+                            val downloadedFormatted = remember(downloadState.downloadedBytes) {
+                                formatBytes(downloadState.downloadedBytes)
+                            }
+                            val totalFormatted = remember(downloadState.totalBytes) {
+                                formatBytes(downloadState.totalBytes)
+                            }
+                            val percentage = (animatedProgress * 100).toInt()
+
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(8.dp)
+                                    .clip(CircleShape)
+                                    .glassBackground(GlassPanelTokens.PillFill)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth(animatedProgress)
+                                        .height(8.dp)
+                                        .clip(CircleShape)
+                                        .glassBackground(Color.White.copy(alpha = 0.92f))
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "$downloadedFormatted / $totalFormatted",
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        fontFamily = FontFamily.Monospace,
+                                        fontSize = 13.sp
+                                    ),
+                                    color = GlassPanelTokens.TextSecondary
+                                )
+                                Text(
+                                    text = "$percentage%",
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        fontFamily = FontFamily.Monospace,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    ),
+                                    color = GlassPanelTokens.TextPrimary
                                 )
                             }
                         }
 
-                        Column {
+                        is UpdateDownloadState.ReadyToInstall -> {
                             Text(
-                                text = when (downloadState) {
-                                    is UpdateDownloadState.ReadyToInstall -> "Download Complete"
-                                    is UpdateDownloadState.Error -> "Update Failed"
-                                    else -> "Updating KeepMe"
-                                },
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                color = TDriveColors.OnBackground
-                            )
-                            Text(
-                                text = "Version ${updateInfo.versionName}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = TDriveColors.OnSurfaceDim
+                                text = "The latest APK has been securely downloaded from @siddTdrive. Tap Install to complete the update.",
+                                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp, lineHeight = 20.sp),
+                                color = GlassPanelTokens.TextSecondary
                             )
                         }
-                    }
 
-                    if (downloadState !is UpdateDownloadState.Downloading) {
-                        IconButton(onClick = onDismissClick) {
-                            Icon(
-                                imageVector = Icons.Rounded.Close,
-                                contentDescription = "Close",
-                                tint = TDriveColors.OnSurfaceDim
+                        is UpdateDownloadState.Error -> {
+                            Text(
+                                text = downloadState.message,
+                                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp, lineHeight = 20.sp),
+                                color = Color(0xFFFF8A80)
                             )
+                        }
+
+                        else -> {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(22.dp),
+                                    strokeWidth = 2.dp,
+                                    color = Color.White
+                                )
+                                Text(
+                                    "Connecting to Telegram update channel...",
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+                                    color = GlassPanelTokens.TextSecondary
+                                )
+                            }
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    when (downloadState) {
+                        is UpdateDownloadState.Downloading ->
+                            GlassSecondaryButton(text = "Cancel Download", onClick = onCancelClick)
 
-                when (downloadState) {
-                    is UpdateDownloadState.Downloading -> {
-                        val animatedProgress by animateFloatAsState(
-                            targetValue = downloadState.progress,
-                            label = "update_download_progress"
-                        )
-
-                        val downloadedFormatted = remember(downloadState.downloadedBytes) {
-                            formatBytes(downloadState.downloadedBytes)
-                        }
-                        val totalFormatted = remember(downloadState.totalBytes) {
-                            formatBytes(downloadState.totalBytes)
-                        }
-                        val percentage = (animatedProgress * 100).toInt()
-
-                        // Progress bar with rounded caps and gradient
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(10.dp)
-                                .clip(RoundedCornerShape(5.dp))
-                                .background(TDriveColors.SurfaceBright)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth(animatedProgress)
-                                    .height(10.dp)
-                                    .clip(RoundedCornerShape(5.dp))
-                                    .background(
-                                        Brush.horizontalGradient(
-                                            listOf(
-                                                TDriveColors.Primary,
-                                                TDriveColors.Secondary
-                                            )
-                                        )
-                                    )
-                            )
+                        is UpdateDownloadState.ReadyToInstall -> {
+                            GlassSecondaryButton(text = "Close", onClick = onDismissClick)
+                            GlassPrimaryButton(text = "Install Update", onClick = onInstallClick)
                         }
 
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        // Stats: Downloaded / Total & Percentage
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "$downloadedFormatted / $totalFormatted",
-                                style = MaterialTheme.typography.bodyMedium.copy(
-                                    fontFamily = FontFamily.Monospace,
-                                    fontWeight = FontWeight.Medium
-                                ),
-                                color = TDriveColors.OnSurface
-                            )
-                            Text(
-                                text = "$percentage%",
-                                style = MaterialTheme.typography.bodyMedium.copy(
-                                    fontFamily = FontFamily.Monospace,
-                                    fontWeight = FontWeight.Bold
-                                ),
-                                color = TDriveColors.Primary
-                            )
+                        is UpdateDownloadState.Error -> {
+                            GlassSecondaryButton(text = "Close", onClick = onDismissClick)
+                            GlassPrimaryButton(text = "Retry", onClick = onRetryClick)
                         }
 
-                        Spacer(modifier = Modifier.height(24.dp))
-
-                        OutlinedButton(
-                            onClick = onCancelClick,
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("Cancel Download", color = TDriveColors.OnSurface)
-                        }
-                    }
-
-                    is UpdateDownloadState.ReadyToInstall -> {
-                        Text(
-                            text = "The latest APK has been securely downloaded from @siddTdrive. Tap Install to complete the update.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = TDriveColors.OnSurface,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        Spacer(modifier = Modifier.height(20.dp))
-
-                        Button(
-                            onClick = onInstallClick,
-                            shape = RoundedCornerShape(14.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(48.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = TDriveColors.Secondary,
-                                contentColor = Color(0xFF003824)
-                            )
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.CheckCircle,
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Install Update",
-                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
-                            )
-                        }
-                    }
-
-                    is UpdateDownloadState.Error -> {
-                        Text(
-                            text = downloadState.message,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = TDriveColors.Error,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        Spacer(modifier = Modifier.height(20.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            OutlinedButton(
-                                onClick = onDismissClick,
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text("Close", color = TDriveColors.OnSurface)
-                            }
-                            Button(
-                                onClick = onCancelClick,
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier.weight(1f),
-                                colors = ButtonDefaults.buttonColors(containerColor = TDriveColors.Primary)
-                            ) {
-                                Text("Retry")
-                            }
-                        }
-                    }
-
-                    else -> {
-                        // Preparing
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(24.dp),
-                                strokeWidth = 2.dp,
-                                color = TDriveColors.Primary
-                            )
-                            Text(
-                                "Connecting to Telegram update channel...",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = TDriveColors.OnSurface
-                            )
-                        }
+                        else -> GlassSecondaryButton(text = "Close", onClick = onDismissClick)
                     }
                 }
             }
         }
     }
 }
-
 private fun formatBytes(bytes: Long): String {
     if (bytes <= 0) return "0 B"
     val units = arrayOf("B", "KB", "MB", "GB")

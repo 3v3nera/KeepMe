@@ -61,13 +61,13 @@ fun PhoneInputScreen(
         Text(
             text = "Your Phone Number",
             style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
-            color = TDriveColors.OnSurface
+            color = TDriveColors.OnCanvas
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = "Please confirm your country code and enter your phone number.",
             style = MaterialTheme.typography.bodyMedium,
-            color = TDriveColors.OnSurfaceDim,
+            color = TDriveColors.OnCanvasMuted,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center
         )
         Spacer(modifier = Modifier.height(32.dp))
@@ -76,19 +76,19 @@ fun PhoneInputScreen(
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
+                .clip(androidx.compose.foundation.shape.CircleShape)
                 .clickable {
                     haptics.click()
                     showCountryDialog = true
                 },
-            shape = RoundedCornerShape(16.dp),
-            color = TDriveColors.SurfaceElevated,
-            border = androidx.compose.foundation.BorderStroke(1.dp, TDriveColors.Outline)
+            shape = androidx.compose.foundation.shape.CircleShape,
+            color = TDriveColors.FillSoft
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                    .height(56.dp)
+                    .padding(horizontal = 20.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
@@ -99,19 +99,19 @@ fun PhoneInputScreen(
                 Text(
                     text = selectedCountry.cNames,
                     style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
-                    color = TDriveColors.OnSurface,
+                    color = TDriveColors.OnCanvas,
                     modifier = Modifier.weight(1f)
                 )
                 Text(
                     text = selectedCountry.countryPhoneCode,
                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                    color = TDriveColors.Primary
+                    color = TDriveColors.OnCanvas
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Icon(
                     imageVector = Icons.Rounded.ArrowDropDown,
                     contentDescription = "Select Country",
-                    tint = TDriveColors.OnSurfaceDim
+                    tint = TDriveColors.OnCanvasMuted
                 )
             }
         }
@@ -119,40 +119,23 @@ fun PhoneInputScreen(
         Spacer(modifier = Modifier.height(16.dp))
 
         // Phone Number Input
-        OutlinedTextField(
+        com.telegramdrive.app.ui.components.GlassTextField(
             value = phoneNumber,
             onValueChange = { input ->
                 phoneNumber = input.filter { it.isDigit() }
                 errorMessage = null
             },
-            leadingIcon = {
-                Text(
-                    text = "${selectedCountry.countryPhoneCode} ",
-                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
-                    color = TDriveColors.Primary,
-                    modifier = Modifier.padding(start = 16.dp)
-                )
-            },
-            placeholder = {
-                Text(
-                    text = "Phone number",
-                    color = TDriveColors.OnSurfaceDim.copy(alpha = 0.5f)
-                )
-            },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
+            placeholder = "Phone number",
+            isError = errorMessage != null,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-            shape = RoundedCornerShape(16.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = TDriveColors.Primary,
-                unfocusedBorderColor = TDriveColors.Outline,
-                focusedContainerColor = TDriveColors.SurfaceElevated,
-                unfocusedContainerColor = TDriveColors.SurfaceElevated,
-                focusedTextColor = TDriveColors.OnSurface,
-                unfocusedTextColor = TDriveColors.OnSurface
-            )
+            leading = {
+                Text(
+                    text = selectedCountry.countryPhoneCode,
+                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
+                    color = TDriveColors.OnCanvas
+                )
+            }
         )
-
         if (errorMessage != null) {
             Spacer(modifier = Modifier.height(10.dp))
             Text(
@@ -165,10 +148,19 @@ fun PhoneInputScreen(
         Spacer(modifier = Modifier.height(32.dp))
 
         var isSubmitting by remember { mutableStateOf(false) }
+        androidx.compose.runtime.LaunchedEffect(isSubmitting) {
+            if (isSubmitting) {
+                kotlinx.coroutines.delay(8000)
+                isSubmitting = false
+            }
+        }
 
-        Button(
+        com.telegramdrive.app.ui.components.GlassPrimaryButton(
+            text = "Next",
+            loading = isSubmitting,
+            modifier = Modifier.fillMaxWidth(),
             onClick = {
-                if (isSubmitting) return@Button
+                if (isSubmitting) return@GlassPrimaryButton
                 val cleanDigits = phoneNumber.trim().trimStart('0')
                 if (cleanDigits.length < 5) {
                     haptics.error()
@@ -180,33 +172,9 @@ fun PhoneInputScreen(
                     val fullNumber = "${selectedCountry.countryPhoneCode}$cleanDigits"
                     onSubmit(fullNumber)
                 }
-            },
-            enabled = !isSubmitting,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp),
-            shape = RoundedCornerShape(28.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = TDriveColors.Primary,
-                disabledContainerColor = TDriveColors.Primary.copy(alpha = 0.5f)
-            )
-        ) {
-            if (isSubmitting) {
-                CircularProgressIndicator(
-                    color = Color.White,
-                    modifier = Modifier.size(24.dp),
-                    strokeWidth = 2.5.dp
-                )
-            } else {
-                Text(
-                    text = "Next",
-                    color = Color.White,
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
-                )
             }
-        }
+        )
     }
-
     // Country Search & Selection Dialog
     if (showCountryDialog) {
         CountryPickerDialog(
@@ -253,8 +221,8 @@ private fun CountryPickerDialog(
                 .fillMaxHeight(0.85f)
                 .clip(RoundedCornerShape(24.dp)),
             shape = RoundedCornerShape(24.dp),
-            color = TDriveColors.Background,
-            border = androidx.compose.foundation.BorderStroke(1.dp, TDriveColors.Outline)
+            color = androidx.compose.ui.graphics.Color.White,
+            border = androidx.compose.foundation.BorderStroke(1.dp, TDriveColors.LineSoft)
         ) {
             Column(
                 modifier = Modifier
@@ -270,13 +238,13 @@ private fun CountryPickerDialog(
                     Text(
                         text = "Select Country",
                         style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                        color = TDriveColors.OnSurface
+                        color = TDriveColors.OnCanvas
                     )
                     IconButton(onClick = onDismiss) {
                         Icon(
                             imageVector = Icons.Rounded.Close,
                             contentDescription = "Close",
-                            tint = TDriveColors.OnSurfaceDim
+                            tint = TDriveColors.OnCanvasMuted
                         )
                     }
                 }
@@ -290,14 +258,14 @@ private fun CountryPickerDialog(
                     placeholder = {
                         Text(
                             text = "Search country or dial code...",
-                            color = TDriveColors.OnSurfaceDim.copy(alpha = 0.6f)
+                            color = TDriveColors.OnCanvasMuted.copy(alpha = 0.6f)
                         )
                     },
                     leadingIcon = {
                         Icon(
                             imageVector = Icons.Rounded.Search,
                             contentDescription = "Search",
-                            tint = TDriveColors.OnSurfaceDim
+                            tint = TDriveColors.OnCanvasMuted
                         )
                     },
                     trailingIcon = {
@@ -306,7 +274,7 @@ private fun CountryPickerDialog(
                                 Icon(
                                     imageVector = Icons.Rounded.Close,
                                     contentDescription = "Clear",
-                                    tint = TDriveColors.OnSurfaceDim
+                                    tint = TDriveColors.OnCanvasMuted
                                 )
                             }
                         }
@@ -315,12 +283,12 @@ private fun CountryPickerDialog(
                     singleLine = true,
                     shape = RoundedCornerShape(14.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = TDriveColors.Primary,
-                        unfocusedBorderColor = TDriveColors.Outline,
-                        focusedContainerColor = TDriveColors.SurfaceElevated,
-                        unfocusedContainerColor = TDriveColors.SurfaceElevated,
-                        focusedTextColor = TDriveColors.OnSurface,
-                        unfocusedTextColor = TDriveColors.OnSurface
+                        focusedBorderColor = TDriveColors.PrimaryVariant,
+                        unfocusedBorderColor = TDriveColors.LineSoft,
+                        focusedContainerColor = TDriveColors.FillSoft,
+                        unfocusedContainerColor = TDriveColors.FillSoft,
+                        focusedTextColor = TDriveColors.OnCanvas,
+                        unfocusedTextColor = TDriveColors.OnCanvas
                     )
                 )
 
@@ -339,7 +307,7 @@ private fun CountryPickerDialog(
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(
-                                    if (isSelected) TDriveColors.Primary.copy(alpha = 0.15f)
+                                    if (isSelected) TDriveColors.PrimaryVariant.copy(alpha = 0.15f)
                                     else Color.Transparent
                                 )
                                 .clickable { onCountrySelected(country) }
@@ -354,21 +322,21 @@ private fun CountryPickerDialog(
                             Text(
                                 text = country.cNames,
                                 style = MaterialTheme.typography.bodyLarge,
-                                color = if (isSelected) TDriveColors.Primary else TDriveColors.OnSurface,
+                                color = if (isSelected) TDriveColors.PrimaryVariant else TDriveColors.OnCanvas,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                                 modifier = Modifier.weight(1f)
                             )
                             Text(
                                 text = country.countryPhoneCode,
                                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                                color = if (isSelected) TDriveColors.Primary else TDriveColors.OnSurfaceDim
+                                color = if (isSelected) TDriveColors.PrimaryVariant else TDriveColors.OnCanvasMuted
                             )
                             if (isSelected) {
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Icon(
                                     imageVector = Icons.Rounded.Check,
                                     contentDescription = "Selected",
-                                    tint = TDriveColors.Primary,
+                                    tint = TDriveColors.PrimaryVariant,
                                     modifier = Modifier.size(18.dp)
                                 )
                             }
