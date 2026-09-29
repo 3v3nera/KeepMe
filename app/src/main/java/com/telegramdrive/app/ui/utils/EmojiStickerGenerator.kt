@@ -7,7 +7,12 @@ import androidx.collection.LruCache
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.foundation.layout.Spacer
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -28,6 +33,10 @@ import androidx.compose.ui.unit.dp
  */
 object EmojiStickerGenerator {
     private val cache = LruCache<String, ImageBitmap>(150)
+
+    /** Cache lookup only (no rendering) so composables can show cached stickers with zero delay. */
+    fun peekStickerBitmap(emoji: String, targetSizePx: Int, strokeRadiusPx: Int = 7): ImageBitmap? =
+        cache.get("$emoji-$targetSizePx-$strokeRadiusPx")
 
     fun getStickerBitmap(
         emoji: String,
@@ -169,15 +178,29 @@ fun ExactContourEmojiSticker(
     val sizePx = remember(size, density) {
         with(density) { (size * 1.5f).roundToPx() }
     }
-    val stickerBitmap = remember(emoji, sizePx) {
-        EmojiStickerGenerator.getStickerBitmap(emoji, sizePx.coerceIn(80, 200))
+    val renderSize = sizePx.coerceIn(80, 200)
+    // Cached stickers appear instantly; new ones are rasterized off the main thread so
+    // scrolling and screen transitions never wait on the pixel work.
+    val stickerBitmap by produceState(
+        initialValue = EmojiStickerGenerator.peekStickerBitmap(emoji, renderSize),
+        emoji, renderSize
+    ) {
+        if (value == null) {
+            value = withContext(Dispatchers.Default) {
+                EmojiStickerGenerator.getStickerBitmap(emoji, renderSize)
+            }
+        }
     }
-
-    Image(
-        bitmap = stickerBitmap,
-        contentDescription = emoji,
-        modifier = modifier
-            .size(size)
-            .graphicsLayer { rotationZ = rotation }
-    )
+    val bitmap = stickerBitmap
+    if (bitmap != null) {
+        Image(
+            bitmap = bitmap,
+            contentDescription = emoji,
+            modifier = modifier
+                .size(size)
+                .graphicsLayer { rotationZ = rotation }
+        )
+    } else {
+        Spacer(modifier.size(size))
+    }
 }

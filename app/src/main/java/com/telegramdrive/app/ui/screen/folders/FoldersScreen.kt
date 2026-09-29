@@ -48,9 +48,12 @@ import kotlinx.coroutines.launch
 
 import androidx.compose.material.icons.rounded.CreateNewFolder
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.shadow
 import androidx.compose.foundation.border
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import com.styropyr0.prismal.drawPrismalGlass
 import com.styropyr0.prismal.prismalGlassEffects
 import com.styropyr0.prismal.sources.prismalGlassLayer
@@ -66,15 +69,16 @@ import com.telegramdrive.app.ui.utils.rememberAppHaptics
 @Composable
 fun FoldersScreen(
     viewModel: FoldersViewModel = hiltViewModel(),
+    backdrop: com.styropyr0.prismal.PrismalBackdrop? = null,
     onFolderClick: (TelegramFolder) -> Unit,
     onTrashClick: () -> Unit,
     onNavigateToSearch: () -> Unit = {},
-    onNewFolderClick: () -> Unit = {}
+    onNewFolderClick: () -> Unit = {},
+    onFolderOptions: (TelegramFolder) -> Unit = {}
 ) {
     val haptics = rememberAppHaptics()
     val folders by viewModel.folders.collectAsState()
-
-    var selectedFolderForOptions by remember { mutableStateOf<TelegramFolder?>(null) }
+    val isRefreshing by viewModel.isRefreshing.collectAsState()
 
     Scaffold(
         modifier = Modifier
@@ -99,31 +103,19 @@ fun FoldersScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "My Drive",
-                    style = MaterialTheme.typography.displaySmall,
-                    color = Color.White
+                    text = androidx.compose.ui.text.buildAnnotatedString {
+                        withStyle(androidx.compose.ui.text.SpanStyle(color = com.telegramdrive.app.ui.theme.TDriveColors.OnCanvasMuted, fontWeight = FontWeight.Normal)) { append("Your ") }
+                        withStyle(androidx.compose.ui.text.SpanStyle(color = com.telegramdrive.app.ui.theme.TDriveColors.OnCanvas, fontWeight = FontWeight.Bold)) { append("Drive") }
+                    },
+                    style = MaterialTheme.typography.displaySmall
                 )
 
                 Box(
                     modifier = Modifier
-                        .size(44.dp)
-                        .shadow(
-                            elevation = 6.dp,
-                            shape = CircleShape,
-                            spotColor = Color(0xFF3863E5).copy(alpha = 0.40f)
-                        )
+                        .size(48.dp)
                         .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.12f))
-                        .border(
-                            width = 1.2.dp,
-                            brush = Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.White.copy(alpha = 0.75f),
-                                    Color.White.copy(alpha = 0.20f)
-                                )
-                            ),
-                            shape = CircleShape
-                        )
+                        .background(TDriveColors.SurfaceBright)
+                        .border(1.dp, TDriveColors.LineSoft, CircleShape)
                         .clickable {
                             haptics.click()
                             onNewFolderClick()
@@ -133,7 +125,7 @@ fun FoldersScreen(
                     Icon(
                         imageVector = Icons.Rounded.CreateNewFolder,
                         contentDescription = "New Folder",
-                        tint = Color.White,
+                        tint = TDriveColors.OnCanvas,
                         modifier = Modifier.size(22.dp)
                     )
                 }
@@ -143,11 +135,20 @@ fun FoldersScreen(
             val customFolders = folders.filter { !it.isSavedMessages }
 
             // Track folders that have already executed their entrance animation once
-            val animatedFolderKeys = remember { mutableSetOf<String>() }
+            val animatedFolderKeys = animatedFolderKeysSession
 
+            @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+            androidx.compose.material3.pulltorefresh.PullToRefreshBox(
+                isRefreshing = isRefreshing,
+                onRefresh = {
+                    haptics.tick()
+                    viewModel.refresh()
+                },
+                modifier = Modifier.fillMaxSize()
+            ) {
             LazyVerticalGrid(
                 columns = GridCells.Fixed(2),
-                contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 130.dp),
+                contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 20.dp, bottom = com.telegramdrive.app.ui.components.NavBarMetrics.contentBottomPadding),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalArrangement = Arrangement.spacedBy(20.dp),
                 modifier = Modifier.fillMaxSize()
@@ -173,7 +174,7 @@ fun FoldersScreen(
                         TactileFolderCard(
                             folder = savedMessages,
                             onClick = { onFolderClick(savedMessages) },
-                            onLongClick = { selectedFolderForOptions = savedMessages },
+                            onLongClick = { onFolderOptions(savedMessages) },
                             modifier = Modifier.graphicsLayer {
                                 this.alpha = alpha.value
                                 translationY = translateY.value
@@ -232,7 +233,7 @@ fun FoldersScreen(
                     TactileFolderCard(
                         folder = folder,
                         onClick = { onFolderClick(folder) },
-                        onLongClick = { selectedFolderForOptions = folder },
+                        onLongClick = { onFolderOptions(folder) },
                         modifier = Modifier.graphicsLayer {
                             this.alpha = alpha.value
                             translationY = translateY.value
@@ -240,32 +241,15 @@ fun FoldersScreen(
                     )
                 }
             }
+            }
         }
 
 
-        // Liquid Glass Folder Options Dialog (Rename, Sticker, Delete)
-        if (selectedFolderForOptions != null) {
-            LiquidGlassFolderOptionsDialog(
-                folder = selectedFolderForOptions!!,
-                onRename = { newName, newEmoji ->
-                    val folder = selectedFolderForOptions ?: return@LiquidGlassFolderOptionsDialog
-                    viewModel.renameFolder(
-                        chatId = folder.id,
-                        newName = newName,
-                        emoji = newEmoji
-                    )
-                },
-                onDelete = {
-                    val folder = selectedFolderForOptions ?: return@LiquidGlassFolderOptionsDialog
-                    viewModel.deleteFolder(folder.id)
-                },
-                onDismiss = {
-                    selectedFolderForOptions = null
-                }
-            )
-        }
     }
 }
+
+/** Folder cards that already played their entrance animation this session. */
+private val animatedFolderKeysSession = mutableSetOf<String>()
 
 @Composable
 fun GrainyGradientBox(

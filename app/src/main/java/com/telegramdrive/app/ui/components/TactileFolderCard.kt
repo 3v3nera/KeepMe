@@ -46,6 +46,7 @@ import com.telegramdrive.app.domain.model.TelegramFolder
 import com.telegramdrive.app.ui.theme.TDriveMotion
 import com.telegramdrive.app.ui.utils.FolderEmojiUtils
 import com.telegramdrive.app.ui.utils.rememberAppHaptics
+import com.telegramdrive.app.ui.components.fadeAtNavBarEdge
 
 /**
  * Exact Folder Silhouette replicated 1:1 from the Reference Design:
@@ -193,6 +194,7 @@ fun TactileFolderCard(
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
+                .folderContainerTransition(folder.id)
                 .aspectRatio(0.92f) // Composition aspect ratio matching reference
         ) {
             val cardW = maxWidth
@@ -307,9 +309,9 @@ fun TactileFolderCard(
                     }
 
                     if (folder.isSavedMessages && folder.emoji == null) {
-                        TelegramCloudVinylSticker()
+                        TelegramCloudVinylSticker(modifier = Modifier.folderStickerTransition(folder.id))
                     } else {
-                        EmojiVinylSticker(emoji = displayEmoji)
+                        EmojiVinylSticker(emoji = displayEmoji, modifier = Modifier.folderStickerTransition(folder.id))
                     }
                 }
             }
@@ -324,11 +326,13 @@ fun TactileFolderCard(
                 fontWeight = FontWeight.SemiBold,
                 letterSpacing = 0.2.sp
             ),
-            color = Color.White,
+            color = com.telegramdrive.app.ui.theme.TDriveColors.OnCanvas,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = 8.dp)
+            modifier = Modifier
+                .padding(horizontal = 8.dp)
+                .fadeAtNavBarEdge()
         )
     }
 }
@@ -479,9 +483,11 @@ fun TactileTrashFolderCard(
                 fontWeight = FontWeight.SemiBold,
                 letterSpacing = 0.2.sp
             ),
-            color = Color.White,
+            color = com.telegramdrive.app.ui.theme.TDriveColors.OnCanvas,
             textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = 8.dp)
+            modifier = Modifier
+                .padding(horizontal = 8.dp)
+                .fadeAtNavBarEdge()
         )
     }
 }

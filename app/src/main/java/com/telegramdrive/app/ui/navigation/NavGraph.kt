@@ -63,15 +63,31 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxWidth
 import com.telegramdrive.app.ui.utils.rememberAppHaptics
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.background
+import androidx.compose.ui.Alignment
+import com.telegramdrive.app.ui.components.LocalNavBarBounds
+import com.telegramdrive.app.ui.components.NavBarBounds
+import androidx.compose.runtime.CompositionLocalProvider
+import com.telegramdrive.app.ui.components.folderContainerTransition
 
 @Composable
 fun AppNavGraph(modifier: Modifier = Modifier) {
     val navController = rememberNavController()
     val backdrop = rememberPrismalGlassLayer()
+    val navBarBounds = remember { mutableStateOf(NavBarBounds()) }
     val foldersViewModel: FoldersViewModel = hiltViewModel()
     val localContext = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val haptics = rememberAppHaptics()
+
+    LaunchedEffect(Unit) {
+        foldersViewModel.events.collect { msg ->
+            android.widget.Toast.makeText(localContext, msg, android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
@@ -80,6 +96,7 @@ fun AppNavGraph(modifier: Modifier = Modifier) {
 
     var showCreateFolderAndUploadDialog by remember { mutableStateOf(false) }
     var showCreateFolderDialog by remember { mutableStateOf(false) }
+    var folderForOptions by remember { mutableStateOf<com.telegramdrive.app.domain.model.TelegramFolder?>(null) }
     var pendingFolderName by remember { mutableStateOf<String?>(null) }
     var pendingFolderEmoji by remember { mutableStateOf<String?>(null) }
 
@@ -94,7 +111,7 @@ fun AppNavGraph(modifier: Modifier = Modifier) {
             if (folderToCreate != null) {
                 coroutineScope.launch {
                     val newChatId = foldersViewModel.createFolderAndGetId(folderToCreate, emojiToCreate)
-                    foldersViewModel.uploadFiles(uris, localContext, newChatId)
+                    if (newChatId != null) foldersViewModel.uploadFiles(uris, localContext, newChatId)
                 }
             } else {
                 foldersViewModel.uploadFiles(uris, localContext, currentChatId)
@@ -123,113 +140,62 @@ fun AppNavGraph(modifier: Modifier = Modifier) {
 
     LaunchedEffect(currentRoute) {
         isBottomBarVisible = true
-        currentSelectionActions = null
     }
 
     val nestedScrollConnection = remember {
         object : NestedScrollConnection {
-            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                if (available.y < -8f) {
-                    // Scrolling down (finger moves up) -> hide bottom bar
-                    isBottomBarVisible = false
-                } else if (available.y > 8f) {
-                    // Scrolling up (finger moves down) -> show bottom bar
-                    isBottomBarVisible = true
+            // Use what content actually consumed so pull-to-refresh overscroll and
+            // non-scrolling gestures never toggle the bar
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource
+            ): Offset {
+                if (source == NestedScrollSource.UserInput) {
+                    if (consumed.y < -8f) {
+                        // Scrolling down (finger moves up) -> hide bottom bar
+                        isBottomBarVisible = false
+                    } else if (consumed.y > 8f) {
+                        // Scrolling up (finger moves down) -> show bottom bar
+                        isBottomBarVisible = true
+                    }
                 }
                 return Offset.Zero
             }
         }
     }
 
-    val targetColors = remember(effectiveRoute) {
-        when (effectiveRoute) {
-            Screen.Home.route -> listOf(
-                com.telegramdrive.app.ui.theme.TDriveColors.Background,
-                com.telegramdrive.app.ui.theme.TDriveColors.BackgroundAlt,
-                androidx.compose.ui.graphics.Color(0xFF2C1635),
-                androidx.compose.ui.graphics.Color(0xFF381528),
-                com.telegramdrive.app.ui.theme.TDriveColors.Background,
-                com.telegramdrive.app.ui.theme.TDriveColors.SurfaceElevated,
-                com.telegramdrive.app.ui.theme.TDriveColors.BackgroundAlt,
-                androidx.compose.ui.graphics.Color(0xFF4A1C3C),
-                com.telegramdrive.app.ui.theme.TDriveColors.Background
-            )
-            Screen.Trash.route -> listOf(
-                com.telegramdrive.app.ui.theme.TDriveColors.Background,
-                com.telegramdrive.app.ui.theme.TDriveColors.BackgroundAlt,
-                androidx.compose.ui.graphics.Color(0xFF3A1015),
-                androidx.compose.ui.graphics.Color(0xFF2A080A),
-                com.telegramdrive.app.ui.theme.TDriveColors.Background,
-                com.telegramdrive.app.ui.theme.TDriveColors.SurfaceElevated,
-                com.telegramdrive.app.ui.theme.TDriveColors.BackgroundAlt,
-                androidx.compose.ui.graphics.Color(0xFF4A1015),
-                com.telegramdrive.app.ui.theme.TDriveColors.Background
-            )
-            Screen.Folders.route -> listOf(
-                com.telegramdrive.app.ui.theme.TDriveColors.Background,
-                com.telegramdrive.app.ui.theme.TDriveColors.BackgroundAlt,
-                androidx.compose.ui.graphics.Color(0xFF0F3025),
-                androidx.compose.ui.graphics.Color(0xFF0A241B),
-                com.telegramdrive.app.ui.theme.TDriveColors.Background,
-                com.telegramdrive.app.ui.theme.TDriveColors.SurfaceElevated,
-                com.telegramdrive.app.ui.theme.TDriveColors.BackgroundAlt,
-                androidx.compose.ui.graphics.Color(0xFF144535),
-                com.telegramdrive.app.ui.theme.TDriveColors.Background
-            )
-            Screen.Settings.route -> listOf(
-                com.telegramdrive.app.ui.theme.TDriveColors.Background,
-                com.telegramdrive.app.ui.theme.TDriveColors.BackgroundAlt,
-                androidx.compose.ui.graphics.Color(0xFF162540),
-                androidx.compose.ui.graphics.Color(0xFF101B30),
-                com.telegramdrive.app.ui.theme.TDriveColors.Background,
-                com.telegramdrive.app.ui.theme.TDriveColors.SurfaceElevated,
-                com.telegramdrive.app.ui.theme.TDriveColors.BackgroundAlt,
-                androidx.compose.ui.graphics.Color(0xFF1E3560),
-                com.telegramdrive.app.ui.theme.TDriveColors.Background
-            )
-            else -> listOf(
-                com.telegramdrive.app.ui.theme.TDriveColors.Background,
-                com.telegramdrive.app.ui.theme.TDriveColors.BackgroundAlt,
-                com.telegramdrive.app.ui.theme.TDriveColors.SurfaceElevated,
-                com.telegramdrive.app.ui.theme.TDriveColors.PrimaryContainer,
-                com.telegramdrive.app.ui.theme.TDriveColors.Background,
-                com.telegramdrive.app.ui.theme.TDriveColors.SecondaryContainer,
-                com.telegramdrive.app.ui.theme.TDriveColors.BackgroundAlt,
-                com.telegramdrive.app.ui.theme.TDriveColors.Primary.copy(alpha = 0.2f),
-                com.telegramdrive.app.ui.theme.TDriveColors.Background
-            )
-        }
-    }
-
     var activeMediaViewer by remember { mutableStateOf<Pair<Long, Long>?>(null) }
     var viewerDismissProgress by remember { mutableFloatStateOf(0f) }
-    val targetBlur = if (activeMediaViewer != null) {
-        28.dp * (1f - viewerDismissProgress).coerceIn(0f, 1f)
-    } else {
-        0.dp
+    val targetBlur = when {
+        // No blur behind the viewer: its scrim is ~opaque, and re-blurring the whole app every
+        // frame of a swipe-to-dismiss was the main source of jank there
+        activeMediaViewer != null -> 0.dp
+        showCreateFolderDialog || showCreateFolderAndUploadDialog || folderForOptions != null -> 24.dp
+        else -> 0.dp
     }
-    val galleryBlur by androidx.compose.animation.core.animateDpAsState(
+    val screenContentBlur by androidx.compose.animation.core.animateDpAsState(
         targetValue = targetBlur,
-        animationSpec = tween(120),
-        label = "galleryBlur"
+        animationSpec = tween(200),
+        label = "screenContentBlur"
     )
 
     val isTrashScreen = currentRoute == Screen.Trash.route
     val isMediaViewer = currentRoute?.startsWith("media_viewer") == true
     val isSettingsScreen = currentRoute == Screen.Settings.route
     val isSplashFinished = com.telegramdrive.app.ui.screen.home.AppSessionState.hasPlayedSplash
-    val shouldShowOnScreen = isSplashFinished && !isTrashScreen && !isMediaViewer && !isSettingsScreen && (activeMediaViewer == null) && currentRoute != null
+    val isAnyFolderDialogShowing = showCreateFolderDialog || showCreateFolderAndUploadDialog || folderForOptions != null
+    val shouldShowOnScreen = isSplashFinished && !isTrashScreen && !isMediaViewer && !isSettingsScreen && (activeMediaViewer == null) && !isAnyFolderDialogShowing && currentRoute != null
 
     Box(modifier = modifier.fillMaxSize()) {
-        com.telegramdrive.app.ui.components.AnimatedMeshBackground(targetColors = targetColors)
-
         Scaffold(
             modifier = Modifier
                 .fillMaxSize()
                 .nestedScroll(nestedScrollConnection),
             containerColor = androidx.compose.ui.graphics.Color.Transparent,
             bottomBar = {
-                val effectiveBottomBarVisible = (shouldShowOnScreen && isBottomBarVisible) || (currentSelectionActions != null)
+                val effectiveBottomBarVisible = (shouldShowOnScreen && isBottomBarVisible) ||
+                    (currentSelectionActions != null && activeMediaViewer == null && !isMediaViewer)
                 AnimatedVisibility(
                     visible = effectiveBottomBarVisible,
                     enter = slideInVertically(
@@ -244,6 +210,7 @@ fun AppNavGraph(modifier: Modifier = Modifier) {
                     FloatingBottomBar(
                         items = items.map { Triple(it.title, it.route, it.icon) },
                         currentRoute = effectiveRoute,
+                        isFoldersTab = (currentRoute == Screen.Folders.route),
                         backdrop = backdrop,
                         onNavigate = { route ->
                             if (route == Screen.Folders.route && currentDestination?.route?.startsWith("folder_content") == true) {
@@ -277,6 +244,7 @@ fun AppNavGraph(modifier: Modifier = Modifier) {
                             }
                         },
                         selectionActions = currentSelectionActions,
+                        onBoundsChanged = { bounds -> navBarBounds.value = bounds },
                         modifier = Modifier.padding(bottom = 16.dp)
                     )
                 }
@@ -295,6 +263,14 @@ fun AppNavGraph(modifier: Modifier = Modifier) {
             }
         }
 
+        // Ignore taps while a transition is running: a double tap must not push a screen twice
+        // or pop past the previous one
+        val canNavigate: () -> Boolean = {
+            navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED
+        }
+        val navigateTo: (String) -> Unit = { route -> if (canNavigate()) navController.navigate(route) }
+        val goBack: () -> Unit = { if (canNavigate()) navController.popBackStack() }
+
         val navigateToTab: (String) -> Unit = { route ->
             navController.navigate(route) {
                 popUpTo(navController.graph.findStartDestination().id) { saveState = true }
@@ -303,33 +279,44 @@ fun AppNavGraph(modifier: Modifier = Modifier) {
             }
         }
 
-        NavHost(
-            navController = navController,
-            startDestination = Screen.Home.route,
+        CompositionLocalProvider(LocalNavBarBounds provides navBarBounds) {
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .prismalGlassLayer(backdrop)
-                .then(if (activeMediaViewer != null) Modifier.blur(galleryBlur) else Modifier),
-            // Default tab-switch transitions (cross-dissolve — no directional slide)
-            enterTransition = { TDriveMotion.tabEnter },
-            exitTransition  = { TDriveMotion.tabExit },
-            popEnterTransition  = { TDriveMotion.tabEnter },
-            popExitTransition   = { TDriveMotion.tabExit }
+                .then(if (screenContentBlur > 0.dp) Modifier.blur(screenContentBlur) else Modifier)
         ) {
+            com.telegramdrive.app.ui.components.CanvasBackground()
+
+            @OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
+            androidx.compose.animation.SharedTransitionLayout(modifier = Modifier.fillMaxSize()) {
+            CompositionLocalProvider(com.telegramdrive.app.ui.components.LocalSharedTransitionScope provides this) {
+            NavHost(
+                navController = navController,
+                startDestination = Screen.Home.route,
+                modifier = Modifier.fillMaxSize(),
+                // Default tab-switch transitions (cross-dissolve — no directional slide)
+                enterTransition = { TDriveMotion.tabEnter },
+                exitTransition  = { TDriveMotion.tabExit },
+                popEnterTransition  = { TDriveMotion.tabEnter },
+                popExitTransition   = { TDriveMotion.tabExit }
+            ) {
 
             composable(Screen.Home.route) {
                 HomeScreen(
                     onNavigateToFolder = { folderName, chatId ->
-                        navController.navigate(Screen.FolderContent.createRoute(folderName, chatId))
+                        navigateTo(Screen.FolderContent.createRoute(folderName, chatId))
                     },
                     onNavigateToFolders = { navigateToTab(Screen.Folders.route) },
                     onNavigateToSearch = { navigateToTab(Screen.Search.route) },
                     onNavigateToSettings = {
-                        navController.navigate(Screen.Settings.route)
+                        navigateTo(Screen.Settings.route)
                     },
                     onNavigateToRecentUploads = {
-                        navController.navigate(Screen.RecentUploads.route)
+                        navigateTo(Screen.RecentUploads.route)
                     },
+                    onNavigateToTrash = { navigateTo(Screen.Trash.route) },
+                    onNewFolderClick = { showCreateFolderDialog = true },
                     onFileClick = handleFileClick
                 )
             }
@@ -342,17 +329,30 @@ fun AppNavGraph(modifier: Modifier = Modifier) {
                 )
             }
             
-            composable(Screen.Folders.route) {
+            composable(
+                Screen.Folders.route,
+                // The folder card expands into the folder screen (shared bounds), so just dissolve here
+                exitTransition = {
+                    if (targetState.destination.route?.startsWith("folder_content") == true) fadeOut(tween(160)) else TDriveMotion.tabExit
+                },
+                popEnterTransition = {
+                    if (initialState.destination.route?.startsWith("folder_content") == true) fadeIn(tween(260)) else TDriveMotion.tabEnter
+                }
+            ) {
+            CompositionLocalProvider(com.telegramdrive.app.ui.components.LocalNavAnimatedScope provides this) {
                 FoldersScreen(
+                    backdrop = backdrop,
                     onFolderClick = { folder ->
-                        navController.navigate(Screen.FolderContent.createRoute(folder.name, folder.id))
+                        navigateTo(Screen.FolderContent.createRoute(folder.name, folder.id))
                     },
                     onTrashClick = {
-                        navController.navigate(Screen.Trash.route)
+                        navigateTo(Screen.Trash.route)
                     },
                     onNavigateToSearch = { navigateToTab(Screen.Search.route) },
-                    onNewFolderClick = { showCreateFolderDialog = true }
+                    onNewFolderClick = { showCreateFolderDialog = true },
+                    onFolderOptions = { folderForOptions = it }
                 )
+            }
             }
             
             composable(
@@ -363,7 +363,7 @@ fun AppNavGraph(modifier: Modifier = Modifier) {
                 popExitTransition  = { TDriveMotion.screenPopExit }
             ) {
                 TrashScreen(
-                    onBack = { navController.popBackStack() }
+                    onBack = goBack
                 )
             }
             
@@ -374,7 +374,10 @@ fun AppNavGraph(modifier: Modifier = Modifier) {
                     androidx.navigation.navArgument("folderName") { type = androidx.navigation.NavType.StringType },
                     androidx.navigation.navArgument("chatId") { type = androidx.navigation.NavType.StringType }
                 ),
-                enterTransition    = { TDriveMotion.screenEnter },
+                enterTransition    = {
+                    if (initialState.destination.route == Screen.Folders.route) androidx.compose.animation.EnterTransition.None
+                    else TDriveMotion.screenEnter
+                },
                 exitTransition     = {
                     if (targetState.destination.route?.startsWith("media_viewer") == true) {
                         fadeOut(tween(160))
@@ -389,19 +392,31 @@ fun AppNavGraph(modifier: Modifier = Modifier) {
                         TDriveMotion.screenPopEnter
                     }
                 },
-                popExitTransition  = { TDriveMotion.screenPopExit }
+                popExitTransition  = {
+                    if (targetState.destination.route == Screen.Folders.route) fadeOut(tween(200))
+                    else TDriveMotion.screenPopExit
+                }
             ) { backStackEntry ->
                 val encodedFolderName = backStackEntry.arguments?.getString("folderName") ?: ""
                 val folderName = android.net.Uri.decode(encodedFolderName)
                 val chatId = backStackEntry.arguments?.getString("chatId")?.toLongOrNull() ?: 0L
+                CompositionLocalProvider(com.telegramdrive.app.ui.components.LocalNavAnimatedScope provides this) {
+                // The whole screen is the shared container: it grows out of the tapped card (and shrinks back into it)
+                Box(modifier = Modifier.fillMaxSize().folderContainerTransition(chatId)) {
+                com.telegramdrive.app.ui.components.CanvasBackground()
                 FolderContentScreen(
                     folderName = folderName,
-                    onBack = { navController.popBackStack() },
+                    chatId = chatId,
+                    onBack = goBack,
                     onFileClick = handleFileClick,
+                    onNewFolderClick = { showCreateFolderDialog = true },
                     onSelectionActionsChange = { actions ->
                         currentSelectionActions = actions
-                    }
+                    },
+                    backdrop = backdrop
                 )
+                }
+                }
             }
             
             composable(
@@ -412,7 +427,7 @@ fun AppNavGraph(modifier: Modifier = Modifier) {
                 popExitTransition  = { TDriveMotion.screenPopExit }
             ) {
                 com.telegramdrive.app.ui.screen.settings.SettingsScreen(
-                    onBack = { navController.popBackStack() }
+                    onBack = goBack
                 )
             }
 
@@ -424,7 +439,7 @@ fun AppNavGraph(modifier: Modifier = Modifier) {
                 popExitTransition  = { TDriveMotion.screenPopExit }
             ) {
                 com.telegramdrive.app.ui.screen.home.RecentUploadsScreen(
-                    onBack = { navController.popBackStack() },
+                    onBack = goBack,
                     onFileClick = handleFileClick,
                     onSelectionActionsChange = { actions ->
                         currentSelectionActions = actions
@@ -454,13 +469,63 @@ fun AppNavGraph(modifier: Modifier = Modifier) {
                 }
             }
         }
+            }
+            }
+
+            // Soft fade under the status bar so scrolling content never collides with the clock/icons
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .height(WindowInsets.systemBars.asPaddingValues().calculateTopPadding() + 10.dp)
+                    .background(
+                        androidx.compose.ui.graphics.Brush.verticalGradient(
+                            listOf(
+                                com.telegramdrive.app.ui.theme.TDriveColors.Canvas.copy(alpha = 0.92f),
+                                androidx.compose.ui.graphics.Color.Transparent
+                            )
+                        )
+                    )
+            )
+    }
+    }
+}
+
+    // Popups live outside the glass-source layer. Each is wrapped in AnimatedVisibility so it
+    // fades/settles out instead of vanishing; the options popup remembers its folder for the exit.
+    val popupExit = fadeOut(tween(150)) + androidx.compose.animation.scaleOut(targetScale = 0.97f, animationSpec = tween(150))
+    val lastOptionsFolder = remember { mutableStateOf<com.telegramdrive.app.domain.model.TelegramFolder?>(null) }
+    if (folderForOptions != null) lastOptionsFolder.value = folderForOptions
+
+    AnimatedVisibility(
+        visible = folderForOptions != null,
+        enter = androidx.compose.animation.EnterTransition.None,
+        exit = popupExit
+    ) {
+        lastOptionsFolder.value?.let { folder ->
+            com.telegramdrive.app.ui.components.LiquidGlassFolderOptionsDialog(
+                folder = folder,
+                backdrop = null,
+                onRename = { newName, newEmoji ->
+                    foldersViewModel.renameFolder(chatId = folder.id, newName = newName, emoji = newEmoji)
+                },
+                onDelete = { foldersViewModel.deleteFolder(folder.id) },
+                onDismiss = { folderForOptions = null }
+            )
+        }
     }
 
-    if (showCreateFolderDialog) {
+    AnimatedVisibility(
+        visible = showCreateFolderDialog,
+        enter = androidx.compose.animation.EnterTransition.None,
+        exit = popupExit
+    ) {
         LiquidGlassCreateFolderDialog(
-            backdrop = backdrop,
+            backdrop = null,
             title = "Create Folder",
-            subtitle = "Make a new private spot in your cloud for your files",
+            subtitle = if (currentRoute?.startsWith("folder_content") == true)
+                "Telegram has no nested folders, so this is added next to your others"
+            else "Make a new private spot in your cloud for your files",
             confirmText = "Create",
             onConfirm = { name, emoji ->
                 foldersViewModel.createFolder(name, emoji)
@@ -470,9 +535,13 @@ fun AppNavGraph(modifier: Modifier = Modifier) {
         )
     }
 
-    if (showCreateFolderAndUploadDialog) {
+    AnimatedVisibility(
+        visible = showCreateFolderAndUploadDialog,
+        enter = androidx.compose.animation.EnterTransition.None,
+        exit = popupExit
+    ) {
         LiquidGlassCreateFolderDialog(
-            backdrop = backdrop,
+            backdrop = null,
             title = "Create & Upload",
             subtitle = "Name your new folder to start dropping files into it:",
             confirmText = "Upload Files",
@@ -485,7 +554,6 @@ fun AppNavGraph(modifier: Modifier = Modifier) {
             onDismiss = { showCreateFolderAndUploadDialog = false }
         )
     }
-
     // ── LIVE MEDIA VIEWER OVERLAY DIRECTLY OVER GALLERY ──
     AnimatedVisibility(
         visible = activeMediaViewer != null,
