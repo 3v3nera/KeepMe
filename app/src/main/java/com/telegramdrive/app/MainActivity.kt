@@ -44,7 +44,11 @@ class MainActivity : ComponentActivity() {
         splashScreen.setOnExitAnimationListener { viewProvider ->
             viewProvider.remove()
         }
-        enableEdgeToEdge()
+        // Dark canvas: light status/navigation icons over transparent bars
+        enableEdgeToEdge(
+            statusBarStyle = androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
+        )
 
         telegramManager.initClient()
         _sharedUris.value = getUrisFromIntent(intent)
@@ -56,7 +60,7 @@ class MainActivity : ComponentActivity() {
             TelegramDriveTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = TDriveColors.Background
+                    color = TDriveColors.Canvas
                 ) {
                     Box(
                         modifier = Modifier.fillMaxSize()
@@ -82,7 +86,7 @@ class MainActivity : ComponentActivity() {
                             )
                         } else {
                             // Cold-start / resume fallback
-                            AnimatedMeshBackground()
+                            com.telegramdrive.app.ui.components.CanvasBackground()
                         }
 
                         // 2. Single unified launch splash overlay on top

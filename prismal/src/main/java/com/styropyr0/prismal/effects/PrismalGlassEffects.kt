@@ -62,6 +62,14 @@ fun PrismalGlassEffectProvider.applyPrismalGlassEffects(
             else with(density) { 8.dp.toPx() }
         val maxBlur = baseBlur * tuning.maxBlurScale
         val minBlur = (baseBlur * tuning.minBlurScale).coerceAtLeast(1f)
+        if (PrismalGlass.supportsRefraction && refractionHeightPx > 0f && refractionAmountPx > 0f) {
+            prismalLens(
+                refractionHeight = refractionHeightPx,
+                refractionAmount = refractionAmountPx,
+                depthEffect = depthEffect,
+                chromaticAberration = chromaticAberration
+            )
+        }
         prismalBlur(
             if (l > 0f) lerp(baseBlur, maxBlur, l)
             else lerp(baseBlur, minBlur, -l)
@@ -72,17 +80,16 @@ fun PrismalGlassEffectProvider.applyPrismalGlassEffects(
         } else {
             colorControls(brightness = brightness, saturation = saturation)
         }
+        if (PrismalGlass.supportsRefraction && refractionHeightPx > 0f && refractionAmountPx > 0f) {
+            prismalLens(
+                refractionHeight = refractionHeightPx,
+                refractionAmount = refractionAmountPx,
+                depthEffect = depthEffect,
+                chromaticAberration = chromaticAberration
+            )
+        }
         if (blurRadiusPx > 0f) {
             prismalBlur(blurRadiusPx)
         }
-    }
-
-    if (PrismalGlass.supportsRefraction && refractionHeightPx > 0f && refractionAmountPx > 0f) {
-        prismalLens(
-            refractionHeight = refractionHeightPx,
-            refractionAmount = refractionAmountPx,
-            depthEffect = depthEffect,
-            chromaticAberration = chromaticAberration
-        )
     }
 }

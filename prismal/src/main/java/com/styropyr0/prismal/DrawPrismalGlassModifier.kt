@@ -370,6 +370,7 @@ private class DrawPrismalGlassNode(
 
     override fun onGloballyPositioned(coordinates: LayoutCoordinates) {
         if (coordinates.isAttached) {
+            val wasUnset = layoutCoordinates == null
             if (backdrop.isCoordinatesDependent) {
                 layoutCoordinates = coordinates
             } else {
@@ -378,6 +379,9 @@ private class DrawPrismalGlassNode(
                 }
             }
             nestedGlassSource?.layerCoordinates = coordinates
+            if (wasUnset) {
+                invalidateDraw()
+            }
         }
     }
 

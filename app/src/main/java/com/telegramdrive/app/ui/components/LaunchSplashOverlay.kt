@@ -66,7 +66,7 @@ fun LaunchSplashOverlay(
         modifier = modifier
             .fillMaxSize()
             .graphicsLayer { alpha = bgAlpha.value }
-            .background(Color(0xFF080C18))
+            .background(com.telegramdrive.app.ui.theme.TDriveColors.Canvas)
     ) {
         val screenHeight = maxHeight
         val topPadding = WindowInsets.systemBars.asPaddingValues().calculateTopPadding()
@@ -136,7 +136,7 @@ fun LaunchSplashOverlay(
             ) {
                 Surface(
                     shape = RoundedCornerShape(22.dp),
-                    color = Color(0xFF1E293B).copy(alpha = 0.75f),
+                    color = com.telegramdrive.app.ui.theme.TDriveColors.SurfaceElevated,
                     shadowElevation = 14.dp,
                     modifier = Modifier.size(84.dp)
                 ) {

@@ -6,15 +6,24 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDp
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -32,6 +41,7 @@ import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -41,6 +51,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
@@ -48,8 +59,10 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.styropyr0.prismal.PrismalBackdrop
 import com.styropyr0.prismal.drawPrismalGlass
+import com.styropyr0.prismal.effects.applyPrismalGlassEffects
 import com.styropyr0.prismal.prismalGlassEffects
 import com.styropyr0.prismal.shapes.PrismalCapsule
 import com.telegramdrive.app.ui.theme.TDriveMotion
@@ -68,14 +81,17 @@ private enum class BarDisplayMode {
     NAV, ACTIONS
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun FloatingBottomBar(
     items: List<Triple<String, String, ImageVector>>, // Title, Route, Icon
     currentRoute: String?,
+    isFoldersTab: Boolean = false,
     backdrop: PrismalBackdrop,
     onNavigate: (String) -> Unit,
     onUploadClick: () -> Unit,
     selectionActions: SelectionBarActions? = null,
+    onBoundsChanged: ((NavBarBounds) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val density = LocalDensity.current
@@ -99,117 +115,110 @@ fun FloatingBottomBar(
     val fabRotation = remember { Animatable(if (inSelectionMode) 45f else 0f) }
     val fabPulse = remember { Animatable(1f) }
 
-    // 2-Phase Choreography: Collapse into button -> Rotate button WHILE springing new capsule OUT together!
-    LaunchedEffect(inSelectionMode) {
-        if (inSelectionMode && displayedMode != BarDisplayMode.ACTIONS) {
-            // ── Phase 1: Smoothly collapse the Nav capsule into the '+' button ──
-            launch {
-                capsuleAlpha.animateTo(
-                    targetValue = 0f,
-                    animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing)
-                )
-            }
-            launch {
-                capsuleScaleY.animateTo(
-                    targetValue = 0.82f,
-                    animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing)
-                )
-            }
-            capsuleScaleX.animateTo(
-                targetValue = 0f,
-                animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing)
-            )
+    var capsuleBounds by remember { mutableStateOf(Rect.Zero) }
+    var fabBounds by remember { mutableStateOf(Rect.Zero) }
 
-            // ── Phase 2 & 3 TOGETHER: Rotate '+' to '✕' WHILE Action capsule springs OUT! ──
-            displayedMode = BarDisplayMode.ACTIONS
-
-            launch {
-                fabPulse.animateTo(1.22f, tween(130, easing = FastOutSlowInEasing))
-                fabPulse.animateTo(1f, spring(dampingRatio = 0.5f, stiffness = 160f))
-            }
-            launch {
-                fabRotation.animateTo(
-                    targetValue = 45f,
-                    animationSpec = spring(dampingRatio = 0.58f, stiffness = 135f)
-                )
-            }
-            launch {
-                capsuleAlpha.animateTo(
-                    targetValue = 1f,
-                    animationSpec = tween(durationMillis = 200, easing = LinearOutSlowInEasing)
-                )
-            }
-            launch {
-                capsuleScaleY.animateTo(
-                    targetValue = 1f,
-                    animationSpec = spring(dampingRatio = 0.55f, stiffness = 135f)
-                )
-            }
-            capsuleScaleX.animateTo(
-                targetValue = 1f,
-                animationSpec = spring(
-                    dampingRatio = 0.52f, // True jelly bounce overshoot
-                    stiffness = 125f     // Slower, relaxed pace so you can see the stretch
-                )
-            )
-        } else if (!inSelectionMode && displayedMode != BarDisplayMode.NAV) {
-            // ── Phase 1: Smoothly collapse the Action capsule into the '✕' button ──
-            launch {
-                capsuleAlpha.animateTo(
-                    targetValue = 0f,
-                    animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing)
-                )
-            }
-            launch {
-                capsuleScaleY.animateTo(
-                    targetValue = 0.82f,
-                    animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing)
-                )
-            }
-            capsuleScaleX.animateTo(
-                targetValue = 0f,
-                animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing)
-            )
-
-            // ── Phase 2 & 3 TOGETHER: Rotate '✕' to '+' WHILE Nav capsule springs OUT! ──
-            displayedMode = BarDisplayMode.NAV
-
-            launch {
-                fabPulse.animateTo(1.22f, tween(130, easing = FastOutSlowInEasing))
-                fabPulse.animateTo(1f, spring(dampingRatio = 0.5f, stiffness = 160f))
-            }
-            launch {
-                fabRotation.animateTo(
-                    targetValue = 0f,
-                    animationSpec = spring(dampingRatio = 0.58f, stiffness = 135f)
-                )
-            }
-            launch {
-                capsuleAlpha.animateTo(
-                    targetValue = 1f,
-                    animationSpec = tween(durationMillis = 200, easing = LinearOutSlowInEasing)
-                )
-            }
-            launch {
-                capsuleScaleY.animateTo(
-                    targetValue = 1f,
-                    animationSpec = spring(dampingRatio = 0.55f, stiffness = 135f)
-                )
-            }
-            capsuleScaleX.animateTo(
-                targetValue = 1f,
-                animationSpec = spring(
-                    dampingRatio = 0.52f, // True jelly bounce overshoot
-                    stiffness = 125f     // Slower, relaxed pace
-                )
-            )
+    DisposableEffect(Unit) {
+        onDispose {
+            onBoundsChanged?.invoke(NavBarBounds())
         }
     }
 
-    // Size configuration
-    val itemSize = 64.dp
-    val indicatorSize = 56.dp
+    // Converging choreography: collapse the old capsule into the button, swap content, then spring the
+    // new capsule out. Every run first checks where the animatables actually are, so a cancelled run
+    // (rapid select / deselect) can never leave the capsule collapsed or the FAB mis-rotated.
+    LaunchedEffect(inSelectionMode) {
+        val targetMode = if (inSelectionMode) BarDisplayMode.ACTIONS else BarDisplayMode.NAV
+        val targetRotation = if (inSelectionMode) 45f else 0f
+        val modeChanged = displayedMode != targetMode
+
+        if (modeChanged) {
+            // ── Phase 1: collapse the current capsule into the circular button ──
+            launch {
+                capsuleAlpha.animateTo(0f, tween(durationMillis = 260, easing = FastOutSlowInEasing))
+            }
+            launch {
+                capsuleScaleY.animateTo(0.82f, tween(durationMillis = 280, easing = FastOutSlowInEasing))
+            }
+            capsuleScaleX.animateTo(0f, tween(durationMillis = 280, easing = FastOutSlowInEasing))
+            displayedMode = targetMode
+        }
+
+        // ── Phase 2: rotate the button while the capsule springs out (also restores a capsule
+        //    left half-collapsed by a cancelled run) ──
+        if (modeChanged) {
+            launch {
+                fabPulse.animateTo(1.22f, tween(130, easing = FastOutSlowInEasing))
+                fabPulse.animateTo(1f, spring(dampingRatio = 0.5f, stiffness = 160f))
+            }
+        }
+        launch {
+            fabRotation.animateTo(targetRotation, spring(dampingRatio = 0.58f, stiffness = 135f))
+        }
+        launch {
+            capsuleAlpha.animateTo(1f, tween(durationMillis = 200, easing = LinearOutSlowInEasing))
+        }
+        launch {
+            capsuleScaleY.animateTo(1f, spring(dampingRatio = 0.55f, stiffness = 135f))
+        }
+        capsuleScaleX.animateTo(
+            targetValue = 1f,
+            animationSpec = spring(dampingRatio = 0.52f, stiffness = 125f)
+        )
+    }
+
+    val context = LocalContext.current
+    val tunerStorage = remember { FabTunerStorage(context) }
+    var tuningParams by remember(isFoldersTab) {
+        mutableStateOf(tunerStorage.loadParams(isFoldersTab))
+    }
+    var showTuningSheet by remember { mutableStateOf(false) }
+
+    // Synchronized Size configuration (scales capsule height, tab item width, active pill indicator, and circular button)
+    val defaultIndicatorSize = 56.dp
+    val effectiveIndicatorSize = if (FabTunerConfig.ENABLE_FAB_TUNER) tuningParams.fabSize.dp else defaultIndicatorSize
+    val itemSize = effectiveIndicatorSize + 8.dp
     val horizontalPadding = 8.dp
+
+    val defaultElevation = if (isFoldersTab) 22.dp else 12.dp
+    val effectiveElevation = if (FabTunerConfig.ENABLE_FAB_TUNER) tuningParams.elevation.dp else defaultElevation
+
+    // Optical glass effects applied uniformly to the whole navigation bar (capsule + button)
+    val fabEffects: com.styropyr0.prismal.PrismalGlassEffectProvider.() -> Unit = remember(density, isFoldersTab, tuningParams) {
+        if (FabTunerConfig.ENABLE_FAB_TUNER) {
+            {
+                applyPrismalGlassEffects(
+                    density = density,
+                    adaptiveLuminance = false,
+                    luminance = 0.5f,
+                    blurRadiusPx = with(density) { tuningParams.blurRadius.dp.toPx() },
+                    refractionHeightPx = with(density) { tuningParams.refractionHeight.dp.toPx() },
+                    refractionAmountPx = with(density) { tuningParams.refractionAmount.dp.toPx() },
+                    depthEffect = tuningParams.depthEffect,
+                    chromaticAberration = tuningParams.chromaticAberration,
+                    saturation = tuningParams.saturation,
+                    useVibrancy = true
+                )
+            }
+        } else if (isFoldersTab) {
+            // High Z-Axis Optical Lift: 28.dp full dome + 64.dp refraction Z-distance displacement (blur stays 8.dp)
+            {
+                applyPrismalGlassEffects(
+                    density = density,
+                    adaptiveLuminance = false,
+                    luminance = 0.5f,
+                    blurRadiusPx = with(density) { 8.dp.toPx() },
+                    refractionHeightPx = with(density) { (defaultIndicatorSize / 2).toPx() },
+                    refractionAmountPx = with(density) { 64.dp.toPx() },
+                    depthEffect = true,
+                    chromaticAberration = 0.10f,
+                    useVibrancy = true
+                )
+            }
+        } else {
+            prismalGlassEffects(density)
+        }
+    }
 
     Row(
         modifier = modifier.fillMaxWidth(),
@@ -232,7 +241,14 @@ fun FloatingBottomBar(
                         actions = actions,
                         backdrop = backdrop,
                         itemSize = itemSize,
-                        horizontalPadding = horizontalPadding
+                        horizontalPadding = horizontalPadding,
+                        effects = fabEffects,
+                        elevation = effectiveElevation,
+                        backingTintAlpha = if (FabTunerConfig.ENABLE_FAB_TUNER) tuningParams.backingTintAlpha else 0f,
+                        onCapsuleBoundsChanged = { rect ->
+                            capsuleBounds = rect
+                            onBoundsChanged?.invoke(NavBarBounds(capsule = rect, fab = fabBounds))
+                        }
                     )
                 }
             } else {
@@ -241,9 +257,22 @@ fun FloatingBottomBar(
                     currentRoute = currentRoute,
                     backdrop = backdrop,
                     itemSize = itemSize,
-                    indicatorSize = indicatorSize,
+                    indicatorSize = effectiveIndicatorSize,
                     horizontalPadding = horizontalPadding,
-                    onNavigate = onNavigate
+                    effects = fabEffects,
+                    elevation = effectiveElevation,
+                    backingTintAlpha = if (FabTunerConfig.ENABLE_FAB_TUNER) tuningParams.backingTintAlpha else 0f,
+                    onNavigate = onNavigate,
+                    onLongClick = if (FabTunerConfig.ENABLE_FAB_TUNER) {
+                        {
+                            haptics.heavyClick()
+                            showTuningSheet = true
+                        }
+                    } else null,
+                    onCapsuleBoundsChanged = { rect ->
+                        capsuleBounds = rect
+                        onBoundsChanged?.invoke(NavBarBounds(capsule = rect, fab = fabBounds))
+                    }
                 )
             }
         }
@@ -259,28 +288,35 @@ fun FloatingBottomBar(
             label = "uploadScale"
         )
 
-        val fabBackground by animateColorAsState(
-            targetValue = if (inSelectionMode) Color(0xFFFF453A).copy(alpha = 0.18f) else Color.Transparent,
-            animationSpec = tween(300),
-            label = "fabBackground"
-        )
-
         Box(
             modifier = Modifier
-                .size(indicatorSize)
+                .size(effectiveIndicatorSize)
+                .onGloballyPositioned { coords ->
+                    fabBounds = coords.boundsInWindow()
+                    onBoundsChanged?.invoke(NavBarBounds(capsule = capsuleBounds, fab = fabBounds))
+                }
                 .graphicsLayer {
                     scaleX = uploadScale * fabPulse.value
                     scaleY = uploadScale * fabPulse.value
                 }
-                .shadow(6.dp, CircleShape)
+                .shadow(effectiveElevation, CircleShape)
                 .drawPrismalGlass(
                     backdrop = backdrop,
                     shape = { PrismalCapsule() },
-                    effects = prismalGlassEffects(density)
+                    effects = fabEffects,
+                    specular = KeepMeGlass.specular,
+                    depthInset = KeepMeGlass.depthInset,
+                    onDrawSurface = KeepMeGlass.surface
                 )
-                .background(fabBackground, CircleShape)
+                .then(
+                    if (inSelectionMode) {
+                        Modifier.background(Color(0xFFFF453A).copy(alpha = 0.35f), CircleShape)
+                    } else if (FabTunerConfig.ENABLE_FAB_TUNER && tuningParams.backingTintAlpha > 0f) {
+                        Modifier.background(Color(0xFF0C101A).copy(alpha = tuningParams.backingTintAlpha), CircleShape)
+                    } else Modifier
+                )
                 .clip(CircleShape)
-                .clickable(
+                .combinedClickable(
                     interactionSource = uploadInteractionSource,
                     indication = null,
                     onClick = {
@@ -290,7 +326,13 @@ fun FloatingBottomBar(
                         } else {
                             onUploadClick()
                         }
-                    }
+                    },
+                    onLongClick = if (FabTunerConfig.ENABLE_FAB_TUNER) {
+                        {
+                            haptics.heavyClick()
+                            showTuningSheet = true
+                        }
+                    } else null
                 ),
             contentAlignment = Alignment.Center
         ) {
@@ -306,6 +348,24 @@ fun FloatingBottomBar(
             )
         }
     }
+
+    if (FabTunerConfig.ENABLE_FAB_TUNER && showTuningSheet) {
+        LiquidGlassFabTunerPopup(
+            params = tuningParams,
+            isFoldersTab = isFoldersTab,
+            onParamsChange = { updated ->
+                tuningParams = updated
+                tunerStorage.saveParams(updated, isFoldersTab)
+            },
+            onReset = {
+                val reset = tunerStorage.resetParams(isFoldersTab)
+                tuningParams = reset
+            },
+            onDismiss = {
+                showTuningSheet = false
+            }
+        )
+    }
 }
 
 @Composable
@@ -314,23 +374,40 @@ private fun SelectionActionCapsule(
     backdrop: PrismalBackdrop,
     itemSize: Dp,
     horizontalPadding: Dp,
+    effects: com.styropyr0.prismal.PrismalGlassEffectProvider.() -> Unit,
+    elevation: Dp,
+    backingTintAlpha: Float = 0f,
+    onCapsuleBoundsChanged: ((Rect) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val density = LocalDensity.current
     val haptics = rememberAppHaptics()
 
     Box(
-        modifier = modifier
-            .padding(vertical = 24.dp)
-            .height(72.dp)
-            .shadow(8.dp, CircleShape)
-            .drawPrismalGlass(
-                backdrop = backdrop,
-                shape = { PrismalCapsule() },
-                effects = prismalGlassEffects(density)
-            )
-            .padding(horizontal = horizontalPadding)
+        modifier = modifier.padding(vertical = 24.dp)
     ) {
+        Box(
+            modifier = Modifier
+                .height(72.dp)
+                .onGloballyPositioned { coords ->
+                    onCapsuleBoundsChanged?.invoke(coords.boundsInWindow())
+                }
+                .shadow(elevation, CircleShape)
+                .drawPrismalGlass(
+                    backdrop = backdrop,
+                    shape = { PrismalCapsule() },
+                    effects = effects,
+                    specular = KeepMeGlass.specular,
+                    depthInset = KeepMeGlass.depthInset,
+                    onDrawSurface = KeepMeGlass.surface
+                )
+                .then(
+                    if (backingTintAlpha > 0f) {
+                        Modifier.background(Color(0xFF0C101A).copy(alpha = backingTintAlpha), CircleShape)
+                    } else Modifier
+                )
+                .padding(horizontal = horizontalPadding)
+        ) {
         Row(
             modifier = Modifier.fillMaxHeight(),
             verticalAlignment = Alignment.CenterVertically
@@ -372,6 +449,7 @@ private fun SelectionActionCapsule(
             )
         }
     }
+}
 }
 
 @Composable
@@ -430,28 +508,54 @@ private fun NavCapsule(
     itemSize: Dp,
     indicatorSize: Dp,
     horizontalPadding: Dp,
+    effects: com.styropyr0.prismal.PrismalGlassEffectProvider.() -> Unit,
+    elevation: Dp,
+    backingTintAlpha: Float = 0f,
     onNavigate: (String) -> Unit,
+    onLongClick: (() -> Unit)? = null,
+    onCapsuleBoundsChanged: ((Rect) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val density = LocalDensity.current
     val haptics = rememberAppHaptics()
 
-    val selectedIndex = remember(currentRoute, items) {
-        items.indexOfFirst { it.second == currentRoute }.coerceAtLeast(0)
+    val rawIndex = remember(currentRoute, items) {
+        items.indexOfFirst { it.second == currentRoute }
     }
+    // Keep the indicator parked on the last matching tab while no tab matches, but hide it
+    var selectedIndex by remember { mutableStateOf(rawIndex.coerceAtLeast(0)) }
+    if (rawIndex >= 0) selectedIndex = rawIndex
+    val indicatorAlpha by animateFloatAsState(
+        targetValue = if (rawIndex >= 0) 1f else 0f,
+        animationSpec = tween(200),
+        label = "indicatorAlpha"
+    )
 
     Box(
-        modifier = modifier
-            .padding(vertical = 24.dp)
-            .height(72.dp)
-            .shadow(8.dp, CircleShape)
-            .drawPrismalGlass(
-                backdrop = backdrop,
-                shape = { PrismalCapsule() },
-                effects = prismalGlassEffects(density)
-            )
-            .padding(horizontal = horizontalPadding)
+        modifier = modifier.padding(vertical = 24.dp)
     ) {
+        Box(
+            modifier = Modifier
+                .height(72.dp)
+                .onGloballyPositioned { coords ->
+                    onCapsuleBoundsChanged?.invoke(coords.boundsInWindow())
+                }
+                .shadow(elevation, CircleShape)
+                .drawPrismalGlass(
+                    backdrop = backdrop,
+                    shape = { PrismalCapsule() },
+                    effects = effects,
+                    specular = KeepMeGlass.specular,
+                    depthInset = KeepMeGlass.depthInset,
+                    onDrawSurface = KeepMeGlass.surface
+                )
+                .then(
+                    if (backingTintAlpha > 0f) {
+                        Modifier.background(Color(0xFF0C101A).copy(alpha = backingTintAlpha), CircleShape)
+                    } else Modifier
+                )
+                .padding(horizontal = horizontalPadding)
+        ) {
         // Stretch and squeeze animated indicator
         val transition = androidx.compose.animation.core.updateTransition(
             targetState = selectedIndex,
@@ -497,8 +601,10 @@ private fun NavCapsule(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(indicatorSize)
+                    .graphicsLayer { alpha = indicatorAlpha }
                     .clip(CircleShape)
-                    .background(Color(0xFF1C1C1E))
+                    .background(Color(0xFF1C1C1E).copy(alpha = 0.78f))
+                    .border(0.75.dp, Color.White.copy(alpha = 0.16f), CircleShape)
             )
         }
 
@@ -518,7 +624,7 @@ private fun NavCapsule(
                 )
 
                 val iconTint by animateColorAsState(
-                    targetValue = if (isSelected) Color.White else Color(0xFF8E8E93),
+                    targetValue = if (isSelected) Color.White else Color.White.copy(alpha = 0.88f),
                     animationSpec = tween(TDriveMotion.chipSwitchMs),
                     label = "iconTint"
                 )
@@ -554,4 +660,5 @@ private fun NavCapsule(
             }
         }
     }
+}
 }

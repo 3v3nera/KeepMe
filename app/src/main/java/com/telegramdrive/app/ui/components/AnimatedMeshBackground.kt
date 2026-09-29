@@ -58,8 +58,12 @@ fun AnimatedMeshBackground(
         var lastFrameTime = 0L
 
         while (true) {
+            var pendingPoints: List<Offset>? = null
             withFrameNanos { frameTime ->
                 if (lastFrameTime == 0L) lastFrameTime = frameTime
+                // The backdrop drifts slowly, so ~30 updates/s is visually identical and halves the
+                // per-frame recomposition + mesh redraw cost of a full-screen animated layer.
+                if (frameTime - lastFrameTime < 33_000_000L) return@withFrameNanos
                 val deltaTime = (frameTime - lastFrameTime) / 1_000_000_000.0f
                 lastFrameTime = frameTime
                 time += deltaTime * 0.15f // Slow down the animation speed for a relaxed ambient feel
@@ -83,10 +87,10 @@ fun AnimatedMeshBackground(
                     currentPoints[i] = lerped
                 }
 
-                launch {
-                    meshState.snapAllPoints(currentPoints.toList())
-                }
+                // snapAllPoints only mutates state; do it in the frame callback scope directly
+                pendingPoints = currentPoints.toList()
             }
+            pendingPoints?.let { meshState.snapAllPoints(it) }
         }
     }
 

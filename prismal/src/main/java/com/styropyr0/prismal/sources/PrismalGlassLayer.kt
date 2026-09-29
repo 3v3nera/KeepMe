@@ -3,6 +3,7 @@ package com.styropyr0.prismal.sources
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -57,10 +58,13 @@ class PrismalGlassLayer internal constructor(
 
     internal var layerCoordinates: LayoutCoordinates? by mutableStateOf(null)
 
+    internal var drawRevision by mutableLongStateOf(0L)
+
     private var inverseLayerScope: PrismalLayerTransformScope? = null
 
     override fun readSamplingState() {
         layerCoordinates
+        drawRevision
     }
 
     override fun DrawScope.drawPrismalGlass(

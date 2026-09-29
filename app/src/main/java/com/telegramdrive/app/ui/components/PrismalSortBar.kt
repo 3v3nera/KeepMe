@@ -42,6 +42,7 @@ import com.styropyr0.prismal.depth.PrismalDepthInset
 import com.styropyr0.prismal.depth.PrismalDepthShadow
 import com.styropyr0.prismal.drawPrismalGlass
 import com.styropyr0.prismal.effects.applyPrismalGlassEffects
+import com.styropyr0.prismal.prismalGlassEffects
 import com.styropyr0.prismal.shapes.PrismalCapsule
 import com.styropyr0.prismal.sources.prismalGlassLayer
 import com.styropyr0.prismal.sources.rememberPrismalGlassLayer
@@ -129,112 +130,73 @@ fun PrismalSortBar(
                 },
             contentAlignment = Alignment.CenterStart
         ) {
-            // ── 1. The Track Base with 4 Tabs (Sampled by Prismal AGSL for refraction) ──
+            // ── 1. The Track Base (Sampled by Prismal AGSL for refraction) ──
             Box(
                 modifier = Modifier
                     .matchParentSize()
                     .prismalGlassLayer(trackBackdrop)
                     .clip(CircleShape)
-                    .background(Color(0xFF131B2C))
+                    .background(com.telegramdrive.app.ui.theme.TDriveColors.FillSoft)
                     .border(
                         width = 1.dp,
                         brush = Brush.verticalGradient(
                             listOf(
-                                Color.White.copy(alpha = 0.18f),
-                                Color.White.copy(alpha = 0.05f)
-                            )
-                        ),
-                        shape = CircleShape
-                    )
-                    .padding(trackPadding)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    SortOption.values().forEach { option ->
-                        val isSelected = option == sortOption
-
-                        val textColor by animateColorAsState(
-                            targetValue = if (isSelected) Color.White else Color(0xFF8E9BAE),
-                            animationSpec = tween(180),
-                            label = "textColor"
-                        )
-
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxHeight(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = option.name.lowercase().replaceFirstChar { it.uppercase() },
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                color = textColor,
-                                maxLines = 1
-                            )
-                        }
-                    }
-                }
-            }
-
-            // ── 2. Crystal Clear Refracting Glass Slab (Zero Frost, Clean Optics) ──
-            Box(
-                modifier = Modifier
-                    .offset(x = slabOffsetX)
-                    .size(width = tabWidth, height = slabHeight)
-                    .shadow(
-                        elevation = 6.dp,
-                        shape = CircleShape,
-                        spotColor = Color.Black.copy(alpha = 0.35f)
-                    )
-                    // Pure crystal clear AGSL optical refraction — zero blur/frost
-                    .drawPrismalGlass(
-                        backdrop = trackBackdrop,
-                        shape = { PrismalCapsule() },
-                        effects = {
-                            applyPrismalGlassEffects(
-                                density = density,
-                                adaptiveLuminance = false,
-                                luminance = 1.0f,
-                                blurRadiusPx = 0f, // No blur = crystal clear, zero frost
-                                refractionHeightPx = with(density) { 5.dp.toPx() },
-                                refractionAmountPx = with(density) { 8.dp.toPx() },
-                                chromaticAberration = 0.5f
-                            )
-                        },
-                        specular = {
-                            PrismalSpecular.Ambient.copy(
-                                width = PrismalSpecular.Ambient.width / 1.5f,
-                                blurRadius = PrismalSpecular.Ambient.blurRadius / 1.5f,
-                                alpha = 0.85f
-                            )
-                        },
-                        depthShadow = {
-                            PrismalDepthShadow(
-                                radius = 3.dp,
-                                color = Color.Black.copy(alpha = 0.20f)
-                            )
-                        },
-                        depthInset = {
-                            PrismalDepthInset(
-                                radius = 2.dp,
-                                alpha = 0.35f
-                            )
-                        }
-                    )
-                    .border(
-                        width = 1.2.dp,
-                        brush = Brush.verticalGradient(
-                            listOf(
-                                Color.White.copy(alpha = 0.80f),
-                                Color.White.copy(alpha = 0.20f)
+                                com.telegramdrive.app.ui.theme.TDriveColors.LineSoft,
+                                com.telegramdrive.app.ui.theme.TDriveColors.LineSoft
                             )
                         ),
                         shape = CircleShape
                     )
             )
+
+            // ── 2. Crystal Clear Refracting Glass Slab (Pure V3 Liquid Glass) ──
+            Box(
+                modifier = Modifier
+                    .offset(x = slabOffsetX)
+                    .size(width = tabWidth, height = slabHeight)
+                    .shadow(8.dp, CircleShape)
+                    .drawPrismalGlass(
+                        backdrop = trackBackdrop,
+                        shape = { PrismalCapsule() },
+                        effects = prismalGlassEffects(density),
+                        specular = KeepMeGlass.specular,
+                        depthInset = KeepMeGlass.depthInset,
+                        onDrawSurface = { drawRect(Color.White.copy(alpha = 0.12f)) }
+                    )
+            )
+
+            // ── 3. Foreground Tab Labels (Always 100% Crisp & Sharp on top of the Glass) ──
+            Row(
+                modifier = Modifier
+                    .matchParentSize()
+                    .padding(trackPadding),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                SortOption.values().forEach { option ->
+                    val isSelected = option == sortOption
+
+                    val textColor by animateColorAsState(
+                        targetValue = if (isSelected) Color.White else com.telegramdrive.app.ui.theme.TDriveColors.OnCanvasMuted,
+                        animationSpec = tween(180),
+                        label = "textColor"
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = option.name.lowercase().replaceFirstChar { it.uppercase() },
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            color = textColor,
+                            maxLines = 1
+                        )
+                    }
+                }
+            }
         }
 
         // Fills the remaining space to push the arrow to the extreme right
@@ -263,45 +225,14 @@ fun PrismalSortBar(
                         scaleX = arrowScale.value
                         scaleY = arrowScale.value
                     }
-                    .shadow(
-                        elevation = 6.dp,
-                        shape = CircleShape,
-                        spotColor = Color.Black.copy(alpha = 0.35f)
-                    )
+                    .shadow(8.dp, CircleShape)
                     .drawPrismalGlass(
                         backdrop = arrowBackdrop,
                         shape = { PrismalCapsule() },
-                        effects = {
-                            applyPrismalGlassEffects(
-                                density = density,
-                                adaptiveLuminance = false,
-                                luminance = 1.0f,
-                                blurRadiusPx = 0f,
-                                refractionHeightPx = with(density) { 5.dp.toPx() },
-                                refractionAmountPx = with(density) { 7.dp.toPx() },
-                                chromaticAberration = 0.5f
-                            )
-                        },
-                        specular = {
-                            PrismalSpecular.Ambient.copy(
-                                width = PrismalSpecular.Ambient.width / 1.5f,
-                                blurRadius = PrismalSpecular.Ambient.blurRadius / 1.5f,
-                                alpha = 0.80f
-                            )
-                        },
-                        onDrawSurface = {
-                            drawRect(Color(0xFF131B2C).copy(alpha = 0.85f))
-                        }
-                    )
-                    .border(
-                        width = 1.2.dp,
-                        brush = Brush.verticalGradient(
-                            listOf(
-                                Color.White.copy(alpha = 0.70f),
-                                Color.White.copy(alpha = 0.15f)
-                            )
-                        ),
-                        shape = CircleShape
+                        effects = prismalGlassEffects(density),
+                        specular = KeepMeGlass.specular,
+                        depthInset = KeepMeGlass.depthInset,
+                        onDrawSurface = KeepMeGlass.surface
                     )
                     .clip(CircleShape)
                     .clickable(

@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.foundation.border
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -40,6 +41,9 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
+/** Items that already ran their entrance animation this session (kept out of saved state). */
+private val animatedItemKeys = java.util.Collections.newSetFromMap(java.util.concurrent.ConcurrentHashMap<String, Boolean>())
+
 @Composable
 fun WaterfallGrid(
     files: List<TelegramFile>,
@@ -53,6 +57,11 @@ fun WaterfallGrid(
     onFileDragSelect: (TelegramFile) -> Unit = {},
     onFileVisible: (TelegramFile) -> Unit = {},
     onEmptyAreaLongPress: (Offset) -> Unit = {},
+    /** Opt-in empty message (only shown when [isLoading] is false), e.g. "This folder is empty". */
+    emptyText: String = "",
+    itemBadge: ((TelegramFile) -> String?)? = null,
+    /** Identity used for selection; message ids repeat across chats, so cross-folder lists override this. */
+    selectionKey: (TelegramFile) -> Long = { it.messageId },
     modifier: Modifier = Modifier
 ) {
     val haptics = rememberAppHaptics()
@@ -74,12 +83,20 @@ fun WaterfallGrid(
     }
 
     Box(modifier = modifier) {
+        if (emptyText.isNotEmpty() && !isLoading && files.isEmpty()) {
+            Text(
+                text = emptyText,
+                style = MaterialTheme.typography.bodyLarge,
+                color = GlassPanelTokens.TextSecondary,
+                modifier = Modifier.align(Alignment.Center)
+            )
+        }
         LazyVerticalStaggeredGrid(
             state = gridState,
             columns = StaggeredGridCells.Fixed(2),
             verticalItemSpacing = 8.dp,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 120.dp),
+            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 8.dp, bottom = NavBarMetrics.contentBottomPadding),
             modifier = Modifier.fillMaxSize()
         ) {
             if (isLoading && files.isEmpty()) {
@@ -107,8 +124,9 @@ fun WaterfallGrid(
                         val file = groupFiles[index]
 
                         // ── Staggered first-load entry only on initial fetch ──
-                        var hasAnimated by rememberSaveable(file.chatId, file.messageId) {
-                            mutableStateOf(initialLoadCompleted)
+                        val itemKey = "${file.chatId}_${file.messageId}"
+                        var hasAnimated by remember(itemKey) {
+                            mutableStateOf(initialLoadCompleted || itemKey in animatedItemKeys)
                         }
                         val alpha = remember(file.chatId, file.messageId) { Animatable(if (hasAnimated) 1f else 0f) }
                         val translateY = remember(file.chatId, file.messageId) { Animatable(if (hasAnimated) 0f else 24f) }
@@ -122,16 +140,18 @@ fun WaterfallGrid(
                                     launch { translateY.animateTo(0f, tween(260)) }
                                 }
                                 hasAnimated = true
+                                animatedItemKeys.add(itemKey)
                             }
                         }
 
                         Box(modifier = Modifier.animateItem()) {
                             FileCard(
                                 file = file,
-                                isSelected = selectedFileIds.contains(file.messageId),
+                                isSelected = selectedFileIds.contains(selectionKey(file)),
                                 onClick = { onFileClick(file) },
                                 onLongPress = { onFileLongPress(file) },
                                 onVisible = { onFileVisible(file) },
+                                badge = itemBadge?.invoke(file),
                                 modifier = Modifier
                                     .graphicsLayer {
                                         this.alpha = alpha.value
@@ -155,40 +175,26 @@ fun MonthDividerHeader(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 4.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(horizontal = 4.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.Bottom,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(8.dp)
-                    .clip(CircleShape)
-                    .background(TDriveColors.Primary)
-            )
-            Text(
-                text = monthName,
-                style = MaterialTheme.typography.titleLarge.copy(
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 0.3.sp
-                ),
-                color = Color.White
-            )
-        }
-        Surface(
-            shape = RoundedCornerShape(12.dp),
-            color = Color.White.copy(alpha = 0.08f),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.12f))
-        ) {
-            Text(
-                text = "$count ${if (count == 1) "item" else "items"}",
-                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                color = TDriveColors.OnSurfaceDim,
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-            )
-        }
+        Text(
+            text = monthName,
+            style = MaterialTheme.typography.headlineMedium.copy(
+                fontWeight = FontWeight.Bold,
+                letterSpacing = (-0.5).sp
+            ),
+            color = TDriveColors.OnCanvas
+        )
+        Text(
+            text = if (count == 1) "1 item" else "$count items",
+            style = MaterialTheme.typography.labelMedium,
+            color = TDriveColors.OnCanvasMuted,
+            modifier = Modifier
+                .clip(RoundedCornerShape(50))
+                .border(1.dp, TDriveColors.LineSoft, RoundedCornerShape(50))
+                .padding(horizontal = 12.dp, vertical = 5.dp)
+        )
     }
 }

@@ -35,8 +35,8 @@ fun PrismalGlassEffectProvider.prismalLens(
     if (refractionHeight <= 0f || refractionAmount <= 0f) return
     if (!size.isSpecified) return
 
-    if (padding > 0f) {
-        padding = (padding - refractionHeight).fastCoerceAtLeast(0f)
+    if (refractionHeight > padding) {
+        padding = refractionHeight
     }
 
     val cornerRadii = cornerRadii

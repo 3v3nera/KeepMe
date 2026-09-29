@@ -44,6 +44,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.draw.clip
 import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
@@ -70,7 +71,8 @@ fun FileCard(
     onLongPress: () -> Unit,
     modifier: Modifier = Modifier,
     isSelected: Boolean = false,
-    onVisible: () -> Unit = {}
+    onVisible: () -> Unit = {},
+    badge: String? = null
 ) {
     val haptics = rememberAppHaptics()
 
@@ -165,6 +167,20 @@ fun FileCard(
                     )
                 }
 
+                if (badge != null) {
+                    Text(
+                        text = badge,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White,
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(8.dp)
+                            .clip(RoundedCornerShape(50))
+                            .background(Color.Black.copy(alpha = 0.55f))
+                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                    )
+                }
+
                 // Favourite star — fades in/out
                 val starAlpha by animateFloatAsState(
                     targetValue = if (!isSelected && file.isFavorite) 1f else 0f,
@@ -192,6 +208,8 @@ fun FileCard(
 fun ImageFileCard(file: TelegramFile) {
     val context = LocalContext.current
     val model = file.thumbnailPath ?: file.localFilePath
+    // Resolve the file once per path, not on every recomposition while scrolling
+    val resolvedFile = remember(model) { model?.let { java.io.File(it).takeIf { f -> f.exists() } } }
 
     val cardModifier = Modifier
         .fillMaxWidth()
@@ -211,9 +229,8 @@ fun ImageFileCard(file: TelegramFile) {
     } else {
         AsyncImage(
             model = ImageRequest.Builder(context)
-                .data(java.io.File(model).let { if (it.exists()) it else model })
-                .crossfade(false)
-                .size(Size.ORIGINAL)
+                .data(resolvedFile ?: model)
+                .crossfade(140)
                 .build(),
             contentDescription = file.fileName,
             contentScale = ContentScale.Crop,
@@ -227,7 +244,7 @@ fun VideoFileCard(file: TelegramFile) {
     Box {
         val context = LocalContext.current
         val model = file.thumbnailPath ?: file.localFilePath
-        val hasThumbnail = !model.isNullOrBlank() && java.io.File(model).exists()
+        val hasThumbnail = remember(model) { !model.isNullOrBlank() && java.io.File(model).exists() }
 
         val cardModifier = Modifier
             .fillMaxWidth()
@@ -241,7 +258,7 @@ fun VideoFileCard(file: TelegramFile) {
         if (!hasThumbnail) {
             Box(
                 modifier = cardModifier
-                    .background(Color(0xFF131A2A)),
+                    .background(TDriveColors.SurfaceElevated),
                 contentAlignment = Alignment.Center
             ) {
                 Column(
@@ -269,9 +286,8 @@ fun VideoFileCard(file: TelegramFile) {
         } else {
             AsyncImage(
                 model = ImageRequest.Builder(context)
-                    .data(java.io.File(model))
-                    .crossfade(false)
-                    .size(Size.ORIGINAL)
+                    .data(java.io.File(model!!))
+                    .crossfade(140)
                     .build(),
                 contentDescription = file.fileName,
                 contentScale = ContentScale.Crop,
@@ -324,7 +340,7 @@ fun DocumentFileCard(file: TelegramFile) {
             Surface(
                 shape = RoundedCornerShape(12.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant,
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color.LightGray.copy(alpha = 0.5f))
+                border = androidx.compose.foundation.BorderStroke(1.dp, TDriveColors.LineSoft)
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -333,11 +349,15 @@ fun DocumentFileCard(file: TelegramFile) {
                     Box(
                         modifier = Modifier
                             .size(6.dp)
-                            .background(Color.Red, RoundedCornerShape(50))
+                            .background(TDriveColors.Secondary, RoundedCornerShape(50))
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "Shared",
+                        text = when (file.fileType) {
+                            FileType.AUDIO -> "Audio"
+                            FileType.DOCUMENT -> "Document"
+                            else -> "File"
+                        },
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurface
                     )

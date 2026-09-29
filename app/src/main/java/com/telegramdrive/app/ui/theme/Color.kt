@@ -2,49 +2,50 @@ package com.telegramdrive.app.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
+/**
+ * KeepMe dark palette: a near-black neutral canvas, two raised surface levels, hairlines at
+ * 8-10% white and a single emerald accent. Screens read the *semantic* names (OnCanvas*,
+ * FillSoft, LineSoft, Surface*) so the whole app can be re-themed from this one file.
+ */
 object TDriveColors {
-    // === CANVAS (70% — Backgrounds) ===
-    val Background =        Color(0xFF080C18)  // Deep space navy (L=5%, S=12%, H=225°)
-    val BackgroundAlt =     Color(0xFF0A0F1E)  // Slightly lighter variant
+    // === CANVAS ===
+    val Canvas =            Color(0xFF0B0C0F)  // app background, near-black neutral
+    val Background =        Color(0xFF0B0C0F)
+    val BackgroundAlt =     Color(0xFF0E1013)
 
-    // === SURFACE (25% — Cards, Sheets, Dialogs) ===
-    val Surface =           Color(0xFF111827)  // Card surface (L=10%, S=11%)
-    val SurfaceElevated =   Color(0xFF1A2238)  // Modals, bottom sheets (L=15%)
-    val SurfaceBright =     Color(0xFF243050)  // Hover states, chips (L=20%)
+    // === SURFACES (cards, sheets) ===
+    val Surface =           Color(0xFF16181C)  // default card
+    val SurfaceElevated =   Color(0xFF1B1E23)  // raised card / modal
+    val SurfaceBright =     Color(0xFF262A31)  // chips, pressed states
 
-    // === PRIMARY (5% — Actions, FAB, Links) ===
-    val Primary =           Color(0xFF6C8FFF)  // Electric periwinkle blue
-    val PrimaryVariant =    Color(0xFF4A6FE5)  // Pressed state
-    val PrimaryContainer =  Color(0xFF1A2D5A)  // Muted container background
+    // === ACCENT (emerald, the only brand colour) ===
+    val Accent =            Color(0xFF3EE0B0)
+    val Primary =           Color(0xFF3EE0B0)
+    val PrimaryVariant =    Color(0xFF2BC496)
+    val PrimaryContainer =  Color(0xFF12352B)
+    val Secondary =         Color(0xFF3EE0B0)
+    val SecondaryContainer= Color(0xFF12352B)
 
-    // === SECONDARY (Accent — Success states) ===
-    val Secondary =         Color(0xFF00E5A0)  // Emerald mint (upload complete, online)
-    val SecondaryContainer= Color(0xFF0A2E24)  // Muted green container
+    // === STATES ===
+    val Error =             Color(0xFFFF6B7A)
+    val ErrorContainer =    Color(0xFF3A1A20)
+    val Warning =           Color(0xFFFFB74D)
+    val WarningContainer =  Color(0xFF3A2B14)
 
-    // === ERROR / DANGER ===
-    val Error =             Color(0xFFFF6B8A)  // Soft coral-pink
-    val ErrorContainer =    Color(0xFF3D1520)  // Muted red container
+    // === TEXT ON THE CANVAS / SURFACES ===
+    val OnBackground =      Color(0xFFF2F3F5)  // primary
+    val OnSurface =         Color(0xFFC9CDD4)  // secondary
+    val OnSurfaceDim =      Color(0xFF8B9099)  // tertiary / hints
 
-    // === WARNING ===
-    val Warning =           Color(0xFFFFB74D)  // Warm amber
-    val WarningContainer =  Color(0xFF3D2E14)
+    val OnCanvas =          Color(0xFFF2F3F5)  // titles, body
+    val OnCanvasMuted =     Color(0xFF8B9099)  // subtitles, labels
+    val OnCanvasFaint =     Color(0xFF5A5F68)  // placeholders, disabled
 
-    // === TEXT (NEVER pure white — OLED glare rule) ===
-    val OnBackground =      Color(0xFFE8ECF4)  // Primary text (rgba 255,255,255,0.92)
-    val OnSurface =         Color(0xFFB0B8CC)  // Secondary text (rgba 255,255,255,0.72)
-    val OnSurfaceDim =      Color(0xFF6B7394)  // Tertiary/disabled text (rgba 255,255,255,0.45)
+    // === FILLS & HAIRLINES (white at low alpha, read on any dark surface) ===
+    val FillSoft =          Color(0x0FFFFFFF)  // 6%  chip / field fill
+    val LineSoft =          Color(0x1AFFFFFF)  // 10% hairline
 
-    // === OUTLINE / DIVIDERS ===
-    val Outline =           Color(0xFF1E2740)  // Subtle borders (NOT white/gray lines)
-    val OutlineVariant =    Color(0xFF2A3456)  // Interactive borders
-
-    // === LIGHT THEME (Phase 5 Reference) ===
-    val LightBackgroundGradientStart = Color(0xFFFFDAB9) // Soft peach/pink
-    val LightBackgroundGradientEnd = Color(0xFFF7F7F7)   // Off-white/light gray
-    val LightSurface = Color(0xFFFFFFFF)
-    val LightSurfaceDark = Color(0xFF2C2C2E) // For storage card
-    val LightPrimary = Color(0xFFC4E265) // Light green for chips/progress
-    val LightOnBackground = Color(0xFF1C1C1E)
-    val LightOnSurface = Color(0xFF1C1C1E)
-    val LightOnSurfaceVariant = Color(0xFF8E8E93)
+    // === OUTLINES ===
+    val Outline =           Color(0xFF262A31)
+    val OutlineVariant =    Color(0xFF30353D)
 }

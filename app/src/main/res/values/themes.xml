@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="Theme.EasyTDLib" parent="android:Theme.Material.NoActionBar">
-        <item name="android:windowBackground">#080C18</item>
-        <item name="android:colorBackground">#080C18</item>
-        <item name="android:statusBarColor">#080C18</item>
-        <item name="android:navigationBarColor">#080C18</item>
+        <item name="android:windowBackground">#0B0C0F</item>
+        <item name="android:colorBackground">#0B0C0F</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">false</item>
     </style>
 
     <style name="Theme.App.Starting" parent="Theme.SplashScreen">
-        <item name="windowSplashScreenBackground">#080C18</item>
+        <item name="windowSplashScreenBackground">#0B0C0F</item>
         <item name="windowSplashScreenAnimatedIcon">@drawable/ic_keepme_logo</item>
         <item name="postSplashScreenTheme">@style/Theme.EasyTDLib</item>
     </style>

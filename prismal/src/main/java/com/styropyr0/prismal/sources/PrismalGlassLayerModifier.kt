@@ -2,6 +2,7 @@ package com.styropyr0.prismal.sources
 
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
+import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.node.DrawModifierNode
 import androidx.compose.ui.node.GlobalPositionAwareModifierNode
@@ -57,8 +58,9 @@ private class PrismalGlassLayerNode(
 ) : DrawModifierNode, GlobalPositionAwareModifierNode, Modifier.Node() {
 
     override fun ContentDrawScope.draw() {
-        drawContent()
         capturePrismalLayer(backdrop.graphicsLayer) { backdrop.onDraw(this@draw) }
+        drawLayer(backdrop.graphicsLayer)
+        backdrop.drawRevision++
     }
 
     override fun onGloballyPositioned(coordinates: LayoutCoordinates) {
