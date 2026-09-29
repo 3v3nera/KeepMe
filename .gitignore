@@ -46,3 +46,10 @@ screenshot.png
 screenshot_new.png
 mesh_readme.md
 mesh_readme_utf8.md
+# Local design scratch (contains personal screenshots) and stale showcase drafts
+/screenshots/
+PRISMAL_SHOWCASE.md
+prismal_showcase.html
+# Stray empty files
+/FloatingBottomBar.kt
+/LiquidGlassModifier.kt

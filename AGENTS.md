@@ -20,9 +20,12 @@
 7. **Document / PDF Handling**: Open PDFs and docs directly in the user's installed phone apps via `Intent.ACTION_VIEW` + `FileProvider`. No in-app PDF viewer library needed.
 8. **Video Playback**: Stream directly from Telegram without full pre-downloading using **Media3 ExoPlayer**.
 9. **Automated Camera Backup**: Scheduled daily photo/video backup using Android **WorkManager** (configurable time, Wi-Fi only option).
-10. **Design System & Theme**:
-    - **Dark Mode Only** (Deep navy canvas `#080C18`, elevated surfaces `#111827`, electric blue primary `#6C8FFF`, emerald secondary `#00E5A0`).
-    - **Typography**: Space Grotesk (headings) + Plus Jakarta Sans (body) + JetBrains Mono (file sizes/tech info).
+10. **Design System & Theme** (v3 redesign):
+    - **Dark, neutral canvas** `#0B0C0F` (static, faint emerald glow at the top; no animated mesh), raised surfaces `#16181C`/`#1B1E23`, hairlines at 10% white. One accent: **emerald `#3EE0B0`**. All colours live in `TDriveColors` as semantic tokens (`OnCanvas*`, `FillSoft`, `LineSoft`, `Surface*`); do not hard-code `Color.White` on screens.
+    - **Bento layout**: shared components in `BentoComponents.kt` (`BentoCard`, `TwoToneTitle`, `SectionHeader`, `IconCircleButton`, `SearchPill`, `KeyValueRow`, `MonthPhotoCard`). Popups use `GlassPanel`/`GlassDialogHost` (dark smoked glass with a white primary pill below the card).
+    - **Nav bar + FAB stay liquid glass** (Prismal), icons only (no labels).
+    - **Folder open/close**: the tapped folder card expands into the folder screen (Compose shared-bounds container transform; helpers in `SharedTransitions.kt`) and its sticker flies to the header; back reverses it. Popups fade/scale out via `AnimatedVisibility` in `NavGraph`. Popups always use the opaque smoked `GlassPanel` (`backdrop = null`), never live glass.
+    - **Typography**: Space Grotesk (headings) + Plus Jakarta Sans (body) + JetBrains Mono (sizes/counts); mixed-weight two-tone headings.
     - **Smooth Animations**: Native Compose physics-based springs (`spring(dampingRatio, stiffness)`).
 11. **Dedicated UI Phase (Phase 5)**: All functionality is built in Phases 0–4; Phase 5 is exclusively reserved for styling and matching the user's specific UI reference images.
 
