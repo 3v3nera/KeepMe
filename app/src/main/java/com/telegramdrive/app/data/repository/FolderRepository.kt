@@ -52,10 +52,10 @@ class FolderRepository @Inject constructor(
             )
 
             // Get Channels
-            val chatsList = fileManager.getChannels(100)
+            val candidateIds = fileManager.getAllCandidateChatIds()
             val keptChatIds = mutableSetOf<Long>()
-            
-            for (chatId in chatsList.chatIds) {
+
+            for (chatId in candidateIds) {
                 try {
                     val chat = fileManager.getChat(chatId)
                     // We only want channels where we are the creator/admin for folders
@@ -84,13 +84,21 @@ class FolderRepository @Inject constructor(
             }
 
             // Folders deleted or left elsewhere (e.g. in Telegram itself) must disappear here too.
-            // Only prune when the channel list was not truncated by the fetch limit.
-            if (chatsList.chatIds.size < 100) {
-                for (localId in folderDao.getCustomFolderIds()) {
-                    if (localId !in keptChatIds) {
-                        folderDao.deleteFolderById(localId)
-                        fileMetadataDao.deleteFilesInChat(localId)
-                    }
+            // Only remove a folder when Telegram itself confirms it is gone (chat missing or we left it);
+            // a folder that just wasn't in a list is never deleted.
+            for (localId in folderDao.getCustomFolderIds()) {
+                if (localId in keptChatIds) continue
+                val gone = try {
+                    val chat = fileManager.getChat(localId)
+                    val st = (chat.type as? TdApi.ChatTypeSupergroup)?.let { fileManager.getSupergroupStatus(it.supergroupId) }
+                    st is TdApi.ChatMemberStatusLeft || st is TdApi.ChatMemberStatusBanned
+                } catch (e: Exception) {
+                    (e.message ?: "").contains("400") || (e.message ?: "").contains("404") ||
+                        (e.message ?: "").contains("not found", ignoreCase = true)
+                }
+                if (gone) {
+                    folderDao.deleteFolderById(localId)
+                    fileMetadataDao.deleteFilesInChat(localId)
                 }
             }
         } catch (e: Exception) {

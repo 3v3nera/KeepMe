@@ -85,6 +85,15 @@ class SettingsDataStore(context: Context) {
         sharedPreferences.edit().putBoolean("backup_charging_only", chargingOnly).apply()
     }
 
+    // Organise camera backup into "Photos from <year>" folders
+    fun isBackupByYear(): Boolean {
+        return sharedPreferences.getBoolean("backup_by_year", false)
+    }
+
+    fun setBackupByYear(enabled: Boolean) {
+        sharedPreferences.edit().putBoolean("backup_by_year", enabled).apply()
+    }
+
     fun getLastBackupTimestamp(): Long {
         return sharedPreferences.getLong("last_backup_timestamp", 0L)
     }

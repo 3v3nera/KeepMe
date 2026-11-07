@@ -68,6 +68,14 @@ class SettingsViewModel @Inject constructor(
     private val _isChargingOnly = MutableStateFlow(settingsDataStore.isBackupChargingOnly())
     val isChargingOnly: StateFlow<Boolean> = _isChargingOnly.asStateFlow()
 
+    private val _isBackupByYear = MutableStateFlow(settingsDataStore.isBackupByYear())
+    val isBackupByYear: StateFlow<Boolean> = _isBackupByYear.asStateFlow()
+
+    fun toggleBackupByYear(enabled: Boolean) {
+        settingsDataStore.setBackupByYear(enabled)
+        _isBackupByYear.value = enabled
+    }
+
     private val _backupScope = MutableStateFlow(settingsDataStore.getBackupScope())
     val backupScope: StateFlow<String> = _backupScope.asStateFlow()
 

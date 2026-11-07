@@ -109,15 +109,19 @@ class CameraBackupWorker @AssistedInject constructor(
 
             val mediaItems = mutableListOf<MediaItem>()
             var backupChatId: Long = 0L
+            val backupByYear = settingsDataStore.isBackupByYear()
+            val yearFolderIds = mutableMapOf<Int, Long>()
 
             // -------------------------------------------------------------
             // 1. Camera Backup (Photos & Videos)
             // -------------------------------------------------------------
             if (isCameraBackup) {
-                var backupFolder = folders.find { 
-                    it.name.startsWith("Camera Backup", ignoreCase = true) || it.name == "Camera Backup" 
+                if (!backupByYear) {
+                    var backupFolder = folders.find {
+                        it.name.startsWith("Camera Backup", ignoreCase = true) || it.name == "Camera Backup"
+                    }
+                    backupChatId = backupFolder?.id ?: folderRepository.createFolder("Camera Backup")
                 }
-                backupChatId = backupFolder?.id ?: folderRepository.createFolder("Camera Backup")
 
                 val storedTimestamp = settingsDataStore.getLastBackupTimestamp()
                 val effectiveTimestamp = if (storedTimestamp > 0L) {
@@ -380,8 +384,17 @@ class CameraBackupWorker @AssistedInject constructor(
                     androidx.core.app.NotificationManagerCompat.from(context).notify(com.telegramdrive.app.utils.NotificationHelper.PROGRESS_NOTIFICATION_ID, notif)
                 } catch (_: Exception) {}
 
+                val targetChatId = if (backupByYear) {
+                    // Year the photo was taken -> "Photos from <year>" (created automatically for a new year)
+                    val year = Calendar.getInstance().apply { timeInMillis = item.dateTaken }.get(Calendar.YEAR)
+                    yearFolderIds.getOrPut(year) {
+                        folders.find { it.displayName.equals("Photos from $year", ignoreCase = true) }?.id
+                            ?: folderRepository.createFolder("Photos from $year")
+                    }
+                } else backupChatId
+
                 fileRepository.uploadFileAndWait(
-                    chatId = backupChatId,
+                    chatId = targetChatId,
                     uri = item.uri,
                     mimeType = item.mimeType,
                     fileName = item.name

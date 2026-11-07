@@ -76,6 +76,7 @@ fun SettingsScreen(
     val isBackupEnabled by viewModel.isBackupEnabled.collectAsState()
     val isWifiOnly by viewModel.isWifiOnly.collectAsState()
     val isChargingOnly by viewModel.isChargingOnly.collectAsState()
+    val isBackupByYear by viewModel.isBackupByYear.collectAsState()
     val backupHour by viewModel.backupHour.collectAsState()
     val backupMinute by viewModel.backupMinute.collectAsState()
     val backupScope by viewModel.backupScope.collectAsState()
@@ -320,6 +321,19 @@ fun SettingsScreen(
                                 haptics.click()
                                 viewModel.setBackupScope(if (index == 1) "ALL_TIME" else "FROM_TODAY")
                             }
+                        )
+                    }
+                )
+                SettingsRow(
+                    icon = Icons.Rounded.CalendarMonth,
+                    title = "Sort into yearly folders",
+                    subtitle = "Photos from 2026, Photos from 2027…",
+                    modifier = Modifier.alpha(dim),
+                    trailing = {
+                        TDriveSwitch(
+                            checked = isBackupByYear,
+                            onCheckedChange = { viewModel.toggleBackupByYear(it) },
+                            activeColor = TDriveColors.Accent
                         )
                     }
                 )
